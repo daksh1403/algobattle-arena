@@ -1,7 +1,7 @@
 # AlgoBattle Judge — production image
-# Runs the FastAPI web_arena on port 8080 with Python/C++/Java compilers
-# and a non-root sandbox user. Designed for a VPS behind a cloudflared
-# named tunnel.
+# Runs the FastAPI web_arena with Python/C++/Java compilers and a
+# non-root sandbox user. Designed for Heroku (container stack), a VPS
+# behind a cloudflared named tunnel, or plain `docker run`.
 #
 # Build:
 #   cd backend
@@ -45,14 +45,16 @@ COPY sandbox/__init__.py /app/sandbox/__init__.py
 COPY sandbox/sandbox_runner.py /app/sandbox/sandbox_runner.py
 COPY sandbox/web_arena.py /app/web_arena.py
 
-# Healthcheck: verify the API is up and the sandbox can run code
+# Healthcheck: verify the API is up and the sandbox can run code.
+# Heroku sets $PORT and routes traffic there, so probe it when set.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+    CMD sh -c 'curl -fsS http://127.0.0.1:${PORT:-8080}/health || exit 1'
 
 USER sandbox
-EXPOSE 8080
 
 # Persistent leaderboard file lives in /data (mount a volume here)
 ENV ARENA_DATA_FILE=/data/arena_data.json
 
-CMD ["python3", "-m", "uvicorn", "web_arena:app", "--host", "0.0.0.0", "--port", "8080"]
+# Bind to $PORT when Heroku provides it (they inject it at runtime);
+# default to 8080 for plain Docker / local runs.
+CMD ["sh", "-c", "python3 -m uvicorn web_arena:app --host 0.0.0.0 --port ${PORT:-8080}"]
