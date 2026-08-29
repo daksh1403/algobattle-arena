@@ -1201,6 +1201,19 @@ input,select,textarea{font-family:inherit; font-size:inherit; color:inherit}
 .console-input-row .btn{align-self:stretch; min-width:80px; justify-content:center}
 
 /* Test results cards */
+.lc-banner{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 14px; border-radius:8px; margin-bottom:8px;
+  font-size:13px;
+}
+.lc-banner svg{width:22px; height:22px; flex-shrink:0}
+.lc-banner b{display:block; font-size:14px}
+.lc-banner span{display:block; font-size:11.5px; opacity:0.8}
+.lc-banner.success{background:var(--green-soft); color:var(--green); border:1px solid rgba(46,160,67,.3)}
+.lc-banner.fail{background:var(--red-soft); color:var(--red); border:1px solid rgba(248,81,73,.3)}
+.lc-metrics{display:flex; gap:14px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border)}
+.lc-metric{font-size:10.5px; color:var(--text-3); font-family:var(--font-mono)}
+.lc-metric b{color:var(--text); font-weight:600}
 .test-card{
   border:1px solid var(--border); border-radius:8px;
   padding:10px 12px; margin-bottom:8px;
@@ -1802,6 +1815,7 @@ const $ = id => document.getElementById(id);
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toast(msg, ms=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'),ms); }
 function lineOut(el, kind, text){ const d=document.createElement('div'); d.className=kind; d.textContent=text; el.appendChild(d); el.scrollTop=el.scrollHeight; return d; }
+function lineOutHTML(el, kind, html){ const d=document.createElement('div'); d.className=kind; d.innerHTML=html; el.appendChild(d); el.scrollTop=el.scrollHeight; return d; }
 
 let current = PROBLEMS[0].slug;
 let lastProblemSlug = current;
@@ -2110,19 +2124,31 @@ async function submit(){
   const { ok, data } = await api(path, payload, authToken);
   $('consoleOut').innerHTML = '';
   if (!ok){ lineOut($('consoleOut'),'err', friendlyError(data,'Judge unreachable')); return; }
-  lineOut($('consoleOut'), 'verdict '+data.verdict, `${data.verdict} · ${data.score}`);
-  lineOut($('consoleOut'), 'info', `efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
+  // LeetCode-style verdict banner
+  const allPassed = data.verdict === 'AC';
+  const verdictName = data.verdict==='WA'?'Wrong Answer':data.verdict==='TLE'?'Time Limit Exceeded':data.verdict==='MLE'?'Memory Limit Exceeded':data.verdict==='RE'?'Runtime Error':data.verdict==='CE'?'Compile Error':(allPassed?'Accepted':data.verdict);
+  const banner = allPassed
+    ? `<div class="lc-banner success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><b>Accepted</b><span>All test cases passed</span></div></div>`
+    : `<div class="lc-banner fail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div><b>${verdictName}</b><span>Not all test cases passed</span></div></div>`;
+  lineOutHTML($('consoleOut'), 'banner', banner);
+  lineOut($('consoleOut'), 'info', `${data.score} · efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
   if (data.hidden_summary) lineOut($('consoleOut'), 'info', `Hidden: ${data.hidden_summary.passed}/${data.hidden_summary.total} (${data.hidden_summary.verdict})`);
-  (data.results||[]).forEach((r,i) => {
-    lineOut($('consoleOut'), r.verdict==='AC'?'out':'err', `Test ${i+1}: ${r.verdict} (${r.runtime_ms}ms)`);
-    if (r.verdict!=='AC'){ lineOut($('consoleOut'),'err',`  in: ${r.input}  expected: ${r.expected}  got: ${r.actual||'(none)'}`); }
-  });
+  // LeetCode-style per-test cards: YOUR OUTPUT on every case + metrics
   $('consoleTests').innerHTML = (data.results||[]).map((r,i) => `
     <div class="test-card"><div class="th"><b>Test ${i+1}</b><span class="verdict ${r.verdict}">${r.verdict} · ${r.runtime_ms}ms</span></div>
-    <div class="io">Input<pre>${esc(r.input)}</pre>Expected<pre>${esc(r.expected)}</pre>
-    ${r.verdict!=='AC'?`Your output<pre class="errbox">${esc(r.actual||'(none)')}</pre>`:''}
-    ${r.error?`<pre class="errbox">${esc(r.error)}</pre>`:''}</div></div>`).join('') ||
-    '<div style="color:var(--muted);text-align:center;padding:14px">No results</div>';
+    <div class="io">
+      <div class="field"><div class="field-label">Input</div><pre>${esc(r.input)}</pre></div>
+      <div class="field"><div class="field-label">Expected</div><pre>${esc(r.expected)}</pre></div>
+      <div class="field"><div class="field-label">Your output</div><pre class="${r.verdict==='AC'?'':'errbox'}">${esc(r.actual||'(none)')}</pre></div>
+      <div class="lc-metrics">
+        <span class="lc-metric">Runtime: <b>${r.runtime_ms}ms</b></span>
+        <span class="lc-metric">Memory: <b>${r.memory_kb??'—'}KB</b></span>
+        <span class="lc-metric">CPU: <b>${r.cpu_time_ms??r.runtime_ms}ms</b></span>
+      </div>
+      ${r.error?`<div class="field"><div class="field-label">Error</div><pre class="errbox">${esc(r.error)}</pre></div>`:''}
+    </div></div>`).join('') ||
+    '<div class="empty-state" style="margin:14px"><div class="t">No results</div></div>';
+  updateResultsBadge(data.results);
   showTab('results');
   refreshLeaderboard();
 }
@@ -2661,19 +2687,26 @@ submit = async function(){
   const { ok, data } = await api(path, payload, authToken);
   $('consoleOut').innerHTML = '';
   if (!ok){ lineOut($('consoleOut'),'err', friendlyError(data,'Judge unreachable')); return; }
-  lineOut($('consoleOut'), 'verdict '+data.verdict, `${data.verdict} · ${data.score}`);
-  lineOut($('consoleOut'), 'info', `efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
+  // LeetCode-style verdict banner
+  const allPassed = data.verdict === 'AC';
+  const banner = allPassed
+    ? `<div class="lc-banner success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><b>Accepted</b><span>All test cases passed</span></div></div>`
+    : `<div class="lc-banner fail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div><b>${data.verdict==='WA'?'Wrong Answer':data.verdict==='TLE'?'Time Limit Exceeded':data.verdict==='MLE'?'Memory Limit Exceeded':data.verdict==='RE'?'Runtime Error':data.verdict==='CE'?'Compile Error':data.verdict}</b><span>${data.verdict!=='AC'?'Not all test cases passed':'All test cases passed'}</span></div></div>`;
+  lineOutHTML($('consoleOut'), 'banner', banner);
+  lineOut($('consoleOut'), 'info', `${data.score} · efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
   if (data.hidden_summary) lineOut($('consoleOut'), 'info', `Hidden: ${data.hidden_summary.passed}/${data.hidden_summary.total} (${data.hidden_summary.verdict})`);
-  (data.results||[]).forEach((r,i) => {
-    lineOut($('consoleOut'), r.verdict==='AC'?'out':'err', `Test ${i+1}: ${r.verdict} (${r.runtime_ms}ms)`);
-    if (r.verdict!=='AC'){ lineOut($('consoleOut'),'err',`  in: ${r.input}  expected: ${r.expected}  got: ${r.actual||'(none)'}`); }
-  });
+  // LeetCode-style per-test cards: show YOUR OUTPUT on every case + metrics
   $('consoleTests').innerHTML = (data.results||[]).map((r,i) => `
     <div class="test-card"><div class="th"><b>Test ${i+1}</b><span class="verdict ${r.verdict}">${r.verdict} · ${r.runtime_ms}ms</span></div>
     <div class="io">
       <div class="field"><div class="field-label">Input</div><pre>${esc(r.input)}</pre></div>
       <div class="field"><div class="field-label">Expected</div><pre>${esc(r.expected)}</pre></div>
-      ${r.verdict!=='AC'?`<div class="field"><div class="field-label">Your output</div><pre class="errbox">${esc(r.actual||'(none)')}</pre></div>`:''}
+      <div class="field"><div class="field-label">Your output</div><pre class="${r.verdict==='AC'?'':'errbox'}">${esc(r.actual||'(none)')}</pre></div>
+      <div class="lc-metrics">
+        <span class="lc-metric">Runtime: <b>${r.runtime_ms}ms</b></span>
+        <span class="lc-metric">Memory: <b>${r.memory_kb??'—'}KB</b></span>
+        <span class="lc-metric">CPU: <b>${r.cpu_time_ms??r.runtime_ms}ms</b></span>
+      </div>
       ${r.error?`<div class="field"><div class="field-label">Error</div><pre class="errbox">${esc(r.error)}</pre></div>`:''}
     </div></div>`).join('') ||
     '<div class="empty-state" style="margin:14px"><div class="t">No results</div></div>';

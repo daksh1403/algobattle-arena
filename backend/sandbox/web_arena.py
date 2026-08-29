@@ -432,7 +432,10 @@ class Arena:
             results.append({
                 "input": inp, "expected": expected,
                 "actual": r.stdout.strip(), "verdict": verdict,
-                "runtime_ms": round(r.runtime_ms, 1), "error": r.stderr[:200],
+                "runtime_ms": round(r.runtime_ms, 1),
+                "cpu_time_ms": round(r.cpu_time_ms, 1),
+                "memory_kb": round(r.memory_kb, 1),
+                "error": r.stderr[:200],
             })
             if verdict == "AC":
                 passed += 1
