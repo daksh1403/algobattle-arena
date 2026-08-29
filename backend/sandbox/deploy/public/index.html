@@ -2050,9 +2050,40 @@ function showTab(tab){
 document.querySelectorAll('.console-tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
 async function runCustom(){
-  const code = codeEl.value, stdin = $('customInput').value;
+  const code = codeEl.value;
+  const isProblem = current !== '__compiler__' && !!PROBLEMS.find(p=>p.slug===current);
+  const stdin = $('customInput').value;
   if (!code.trim()) return toast('Write some code first');
   clearConsole();
+
+  // When a problem is selected, Run against its SAMPLE inputs and show a
+  // per-test breakdown. Only the playground uses the custom input box.
+  if (isProblem){
+    const prob = PROBLEMS.find(p=>p.slug===current);
+    const samples = prob ? prob.examples : [];
+    if (!samples.length) return toast('This problem has no sample cases');
+    lineOut($('consoleOut'), 'info', `Running ${samples.length} sample case${samples.length>1?'s':''}…`);
+    const results = [];
+    for (const [inp, exp] of samples){
+      const { ok, data } = await api('/api/compiler/run', { language: $('lang').value, code, stdin: inp });
+      results.push({ inp, exp, data, ok });
+    }
+    $('consoleOut').innerHTML = '';
+    const passed = results.filter(r => r.ok && r.data.verdict==='AC').length;
+    lineOut($('consoleOut'), 'info', `${passed}/${results.length} sample cases passed`);
+    $('consoleTests').innerHTML = results.map((r,i) => `
+      <div class="test-card"><div class="th"><b>Sample ${i+1}</b><span class="verdict ${r.ok&&r.data.verdict==='AC'?'AC':(r.data&&r.data.verdict||'RE')}">${r.ok?r.data.verdict:'ERR'} · ${r.data?.runtime_ms||0}ms</span></div>
+      <div class="io">
+        <div class="field"><div class="field-label">Input</div><pre>${esc(r.inp)}</pre></div>
+        <div class="field"><div class="field-label">Expected</div><pre>${esc(r.exp)}</pre></div>
+        <div class="field"><div class="field-label">Your output</div><pre class="${r.ok&&r.data.verdict==='AC'?'':'errbox'}">${r.ok?esc(r.data.stdout||'(none)'):'error'}</pre></div>
+        ${r.data?.stderr?`<div class="field"><div class="field-label">Error</div><pre class="errbox">${esc(r.data.stderr)}</pre></div>`:''}
+      </div></div>`).join('');
+    showTab('results');
+    return;
+  }
+
+  // Playground / compiler path: single run with the custom input box
   lineOut($('consoleOut'), 'info', 'Running…');
   const { ok, data } = await api('/api/compiler/run', { language: $('lang').value, code, stdin });
   $('consoleOut').innerHTML = '';
@@ -2098,9 +2129,18 @@ async function submit(){
 
 function openAuth(){ $('authModal').classList.add('show'); $('nameInput').focus(); }
 function closeAuth(){ $('authModal').classList.remove('show'); }
+// Hoisted updateAuthUI (function declaration) — must NOT destroy the
+// #authBtnText / #authAvatar / #authAdminDot child spans by setting
+// textContent on the whole button. The later "patch" definition refines
+// it further; both must be safe and idempotent.
 function updateAuthUI(){
-  $('authBtn').textContent = authName ? authName+(isAdmin?' ⭐':'') : 'Sign in';
-  $('adminPanel').classList.toggle('show', isAdmin);
+  const text = $('authBtnText');
+  const avatar = $('authAvatar');
+  const dot = $('authAdminDot');
+  if (text) text.textContent = authName ? authName+(isAdmin?' ⭐':'') : 'Sign in';
+  if (avatar) avatar.style.display = authName ? '' : 'none';
+  if (dot) dot.style.display = (authName && isAdmin) ? '' : 'none';
+  try { $('adminPanel').classList.toggle('show', !!isAdmin); } catch(e){}
 }
 $('nameOk').onclick = async () => {
   const n = $('nameInput').value.trim();
