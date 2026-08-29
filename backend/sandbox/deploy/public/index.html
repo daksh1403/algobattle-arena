@@ -617,6 +617,17 @@ input,select,textarea{font-family:inherit; font-size:inherit; color:inherit}
   position:relative;
 }
 .problem:hover{background:var(--panel-2)}
+.problem .problem-del{
+  margin-left:auto; flex-shrink:0;
+  width:18px; height:18px; border-radius:4px;
+  border:1px solid transparent; background:transparent;
+  color:var(--text-4); font-size:10px; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all .12s;
+}
+.problem .problem-del:hover{
+  color:var(--red); background:var(--red-soft); border-color:rgba(248,81,73,.3);
+}
 .problem.active{
   background:var(--accent-soft);
   border-color:rgba(255,161,22,0.25);
@@ -1989,6 +2000,7 @@ function renderProblemList(){
     <div class="problem ${p.slug===current?'active':''}" onclick="select('${p.slug}')">
       <span class="num">★</span><span class="name">${esc(p.title)}</span>
       <span class="badge custom">CUSTOM</span>
+      <button class="problem-del" title="Delete custom problem" onclick="event.stopPropagation(); deleteCustomProblem('${p.slug}')">✕</button>
     </div>`).join('');
 }
 function renderStatement(p){
@@ -2037,11 +2049,11 @@ function setCompilerLang(l){
   clearConsole();
 }
 
-async function api(path, body, token){
+async function api(path, body, token, method='POST'){
   try {
     const headers = {'Content-Type':'application/json'};
     if (token) headers['X-Token'] = token;
-    const r = await fetch(path, { method:'POST', headers, body: JSON.stringify(body) });
+    const r = await fetch(path, { method, headers, body: method==='GET'?undefined:JSON.stringify(body) });
     let data = {};
     try { data = await r.json(); } catch(e){}
     return { ok: r.ok, status: r.status, data };
@@ -2383,6 +2395,16 @@ async function loadCustomProblems(){
   renderProblemList();
 }
 
+async function deleteCustomProblem(slug){
+  if (!confirm('Delete this custom problem?')) return;
+  const { ok, data } = await api('/api/problems/custom/'+slug, {}, authToken, 'DELETE');
+  if (!ok){ toast((data&&(data.error||data.detail))||'Delete failed', 2600, 'error'); return; }
+  CUSTOM_PROBLEMS = CUSTOM_PROBLEMS.filter(p => p.slug !== slug);
+  if (current === slug){ current = PROBLEMS[0].slug; }
+  renderProblemList();
+  toast('Custom problem deleted', 2600, 'success');
+}
+
 async function refreshLeaderboard(){
   try {
     const r = await fetch('/api/leaderboard'); const data = await r.json();
@@ -2611,6 +2633,7 @@ renderProblemList = function(){
     <div class="problem ${p.slug===current?'active':''}" data-slug="${p.slug}" data-name="${esc(p.title)}" onclick="select('${p.slug}')">
       <span class="problem-custom-dot"></span><span class="name">${esc(p.title)}</span>
       <span class="badge custom">CUSTOM</span>
+      <button class="problem-del" title="Delete custom problem" onclick="event.stopPropagation(); deleteCustomProblem('${p.slug}')">✕</button>
     </div>`).join('');
   updateProblemCount();
   // re-apply current filter

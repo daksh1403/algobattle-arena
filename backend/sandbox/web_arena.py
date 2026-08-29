@@ -526,6 +526,14 @@ class Arena:
             self._save()
         return slug
 
+    def remove_custom_problem(self, slug):
+        with self.lock:
+            if slug not in self.custom_problems:
+                return False
+            del self.custom_problems[slug]
+            self._save()
+        return True
+
     def submit_custom(self, slug, language, code, participant="Anonymous",
                       participant_id=0, contest_id=None):
         prob = self.custom_problems.get(slug)
@@ -923,6 +931,14 @@ def add_custom_problem(req: CustomProblemReq):
     slug = arena.add_custom_problem(req.title, req.description, req.examples,
                                     hidden=req.hidden, creator=req.creator)
     return JSONResponse({"slug": slug, "title": req.title})
+
+
+@app.delete("/api/problems/custom/{slug}")
+def delete_custom_problem(slug: str):
+    removed = arena.remove_custom_problem(slug)
+    if not removed:
+        return JSONResponse({"error": "custom problem not found"}, status_code=404)
+    return JSONResponse({"ok": True, "slug": slug})
 
 
 @app.post("/api/submit/custom")
