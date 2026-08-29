@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Algobattle · Leaderboard</title>
+  </head>
+  <body>
+    <main class="layout">
+      <header class="topbar">
+        <h1 id="title">Leaderboard</h1>
+        <span id="status" class="status">Connecting…</span>
+      </header>
+      <section class="content">
+        <table class="board">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>User</th>
+              <th>Score</th>
+              <th>Solved</th>
+              <th>Penalty</th>
+              <th>Rating</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <p id="empty" class="empty" hidden>No entries yet.</p>
+      </section>
+    </main>
+  </body>
+</html>

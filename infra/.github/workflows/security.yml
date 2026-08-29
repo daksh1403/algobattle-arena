@@ -1,0 +1,198 @@
+# ============================================================================
+# Security — trivy image scan + bandit + npm audit on every PR
+# ============================================================================
+name: security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly scan even if no PR — catches newly-published CVEs
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Trivy — filesystem scan (catches vulns in deps)
+  # -------------------------------------------------------------------------
+  trivy-fs:
+    name: trivy / fs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  # -------------------------------------------------------------------------
+  # Trivy — image scan (only if the build-images job ran)
+  # -------------------------------------------------------------------------
+  trivy-images:
+    name: trivy / images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image (no push)
+        run: docker build -t algobattle-api:scan ./api
+
+      - name: Build judge image (no push)
+        run: docker build -t algobattle-judge:scan ./judge
+
+      - name: Build frontend image (no push)
+        run: |
+          if [ -f ./frontend/Dockerfile ]; then
+            docker build -t algobattle-frontend:scan ./frontend
+          else
+            echo "no frontend Dockerfile — skipping"
+          fi
+        continue-on-error: true
+
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: algobattle-api:scan
+          format: sarif
+          output: trivy-api.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Scan Judge image
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: algobattle-judge:scan
+          format: sarif
+          output: trivy-judge.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-api.sarif
+          category: trivy-api
+
+  # -------------------------------------------------------------------------
+  # Bandit — Python security linter
+  # -------------------------------------------------------------------------
+  bandit:
+    name: bandit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        run: pip install bandit==1.7.10 bandit-sarif-formatter==1.1.1
+
+      - name: Run bandit
+        run: bandit -r app -f sarif -o /tmp/bandit.sarif || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: /tmp/bandit.sarif
+          category: bandit
+
+  # -------------------------------------------------------------------------
+  # npm audit
+  # -------------------------------------------------------------------------
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Audit
+        run: |
+          npm audit --audit-level=high --json > /tmp/npm-audit.json || true
+          # Convert to SARIF so it shows up in the Security tab
+          if command -v npx >/dev/null 2>&1; then
+            npx --yes @cyclonedx/cdx2sarif /tmp/npm-audit.json > /tmp/npm-audit.sarif || true
+          fi
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: /tmp/npm-audit.sarif
+          category: npm-audit
+
+  # -------------------------------------------------------------------------
+  # Hadolint — Dockerfile lint
+  # -------------------------------------------------------------------------
+  hadolint:
+    name: hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: |
+            api/Dockerfile
+            judge/Dockerfile
+          failure-threshold: warning
+
+  # -------------------------------------------------------------------------
+  # Checkov — Terraform security scan
+  # -------------------------------------------------------------------------
+  checkov:
+    name: checkov / tf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform/aws
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov.sarif
+          soft_fail: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov

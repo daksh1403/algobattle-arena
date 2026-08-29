@@ -1,0 +1,102 @@
+# ============================================================================
+# Traefik — Dynamic Middlewares
+# ----------------------------------------------------------------------------
+# Loaded from /etc/traefik/dynamic/ and watched for hot-reload.
+# ============================================================================
+
+http:
+  middlewares:
+
+    # -----------------------------------------------------------------------
+    # Security headers — applied to every public route
+    # -----------------------------------------------------------------------
+    default-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+          X-Content-Type-Options: "nosniff"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+
+    # -----------------------------------------------------------------------
+    # Rate limiting
+    # -----------------------------------------------------------------------
+    rate-limit-public:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 200
+      retryAfter: "true"
+
+    rate-limit-auth:
+      rateLimit:
+        average: 20
+        period: 1m
+        burst: 40
+
+    rate-limit-submissions:
+      rateLimit:
+        average: 30
+        period: 1m
+        burst: 60
+
+    # -----------------------------------------------------------------------
+    # CORS — API
+    # -----------------------------------------------------------------------
+    cors-api:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Authorization
+          - Content-Type
+          - X-Requested-With
+          - X-CSRF-Token
+        accessControlAllowOriginList:
+          - "https://localhost"
+          - "https://algobattle.example.com"
+        accessControlMaxAge: 600
+        accessControlAllowCredentials: true
+        addVaryHeader: true
+
+    # -----------------------------------------------------------------------
+    # Auth — Traefik dashboard (basic auth, htpasswd)
+    # -----------------------------------------------------------------------
+    traefik-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H6uskcqw$AdMtMCyqVc69HmYNL6qFR1"   # admin / changeme
+
+    # -----------------------------------------------------------------------
+    # Compress
+    # -----------------------------------------------------------------------
+    compress:
+      compress: {}
+
+  routers:
+
+    # -----------------------------------------------------------------------
+    # Traefik dashboard — protected by basic auth, bound to localhost only
+    # -----------------------------------------------------------------------
+    traefik-dashboard:
+      rule: "Host(`localhost`) && PathPrefix(`/traefik`)"
+      entryPoints: [http]
+      service: api@internal
+      middlewares: [traefik-auth, default-headers]
+      priority: 100
+
+  services: {}

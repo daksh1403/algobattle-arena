@@ -1,0 +1,65 @@
+# ============================================================================
+# Promtail — log shipper for Loki
+# ----------------------------------------------------------------------------
+# Tails docker container logs from /var/lib/docker/containers.
+# ============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 1048576
+    timeout: 10s
+
+scrape_configs:
+  # Docker container logs
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.project=algobattle"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: stream
+      - target_label: job
+        replacement: docker
+    pipeline_stages:
+      - docker: {}
+      - match:
+          selector: '{service="algobattle-api"}'
+          stages:
+            - regex:
+                expression: '.*level=(?P<level>\w+).*'
+            - labels:
+                level:
+
+  # Host syslog / var/log
+  - job_name: syslog
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: syslog
+          __path__: /var/log/*.log
+    pipeline_stages:
+      - match:
+          selector: '{job="syslog"}'
+          stages:
+            - regex:
+                expression: '^(?P<timestamp>\S+)\s+(?P<host>\S+)\s+(?P<process>\S+):\s+(?P<message>.*)$'
+            - labels:
+                host:
+                process:

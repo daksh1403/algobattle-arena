@@ -1,0 +1,117 @@
+#!/bin/bash
+# ============================================================================
+# Algobattle API EC2 — userdata
+# ----------------------------------------------------------------------------
+# Runs once at first boot. Sets up:
+#   * Docker + compose plugin
+#   * CloudWatch agent
+#   * SSM agent (already installed on Ubuntu 22.04 AMI)
+#   * /opt/algobattle directory with .env + docker-compose
+#   * Systemd service that runs `docker compose up -d` on boot
+# ============================================================================
+
+set -euo pipefail
+exec > /var/log/algobattle-bootstrap.log 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+
+# ----- Update + packages -----
+apt-get update
+apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg \
+    awscli \
+    jq \
+    unzip
+
+# ----- Docker -----
+if ! command -v docker >/dev/null 2>&1; then
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" \
+        > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+fi
+
+# ----- CloudWatch agent -----
+if ! command -v amazon-cloudwatch-agent >/dev/null 2>&1; then
+    wget -q https://s3.us-west-2.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/cw.deb
+    dpkg -i /tmp/cw.deb
+fi
+
+# ----- App directory -----
+mkdir -p /opt/algobattle
+cd /opt/algobattle
+
+# Clone the infra repo
+if [ ! -d .git ]; then
+    git clone --depth 1 https://github.com/${github_org}/algobattle.git /opt/algobattle-src || true
+    if [ -d /opt/algobattle-src/infra ]; then
+        cp -r /opt/algobattle-src/infra/* /opt/algobattle/
+    fi
+fi
+
+# ----- Pull secrets from Secrets Manager -----
+DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${db_secret_arn} --query 'SecretString' --output text | jq -r '.password')
+
+cat > /opt/algobattle/.env <<EOF
+ENVIRONMENT=${environment}
+DOMAIN=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+ACME_EMAIL=ops@algobattle.example.com
+
+IMAGE_API=${image_api}
+IMAGE_JUDGE=${image_judge}
+IMAGE_FRONTEND=${image_frontend}
+
+POSTGRES_HOST=$(echo "${rds_endpoint}" | cut -d: -f1)
+POSTGRES_PORT=${rds_port}
+POSTGRES_USER=algobattle
+POSTGRES_PASSWORD=$$DB_PASSWORD
+POSTGRES_DB=algobattle
+
+REDIS_PASSWORD=$(openssl rand -hex 32)
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+SECRET_KEY=$(openssl rand -hex 32)
+JWT_ALGORITHM=HS256
+JWT_EXPIRES_MINUTES=1440
+
+JUDGE0_URL=http://judge0.algobattle.internal:2358
+JUDGE0_AUTH_TOKEN=$(openssl rand -hex 32)
+JUDGE0_POSTGRES_PASSWORD=$(openssl rand -hex 32)
+JUDGE0_REDIS_PASSWORD=$(openssl rand -hex 32)
+
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 16)
+EOF
+
+chmod 600 /opt/algobattle/.env
+
+# ----- Systemd service -----
+cat > /etc/systemd/system/algobattle.service <<'SYSTEMD'
+[Unit]
+Description=Algobattle docker-compose stack
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/algobattle
+ExecStart=/usr/bin/docker compose -f docker-compose.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f docker-compose.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD
+
+systemctl daemon-reload
+systemctl enable algobattle.service
+systemctl start algobattle.service
+
+echo "Algobattle bootstrap complete at $$(date -u)" > /var/log/algobattle-bootstrap.done

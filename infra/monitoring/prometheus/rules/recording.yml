@@ -1,0 +1,84 @@
+# ============================================================================
+# Prometheus — recording rules
+# ----------------------------------------------------------------------------
+# Pre-compute expensive aggregations so dashboards and alerts stay snappy.
+# ============================================================================
+
+groups:
+  # -------------------------------------------------------------------------
+  # API request rate / error rate / latency aggregates
+  # -------------------------------------------------------------------------
+  - name: api_recording
+    interval: 30s
+    rules:
+      - record: api:request_rate:5m
+        expr: sum(rate(http_requests_total{job="algobattle-api"}[5m])) by (method, status)
+
+      - record: api:error_rate:5m
+        expr: |
+          sum(rate(http_requests_total{job="algobattle-api",status=~"5.."}[5m])) by (method)
+            /
+          sum(rate(http_requests_total{job="algobattle-api"}[5m])) by (method)
+
+      - record: api:latency_p50:5m
+        expr: |
+          histogram_quantile(0.5,
+            sum(rate(http_request_duration_seconds_bucket{job="algobattle-api"}[5m])) by (le, route)
+          )
+
+      - record: api:latency_p95:5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="algobattle-api"}[5m])) by (le, route)
+          )
+
+      - record: api:latency_p99:5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="algobattle-api"}[5m])) by (le, route)
+          )
+
+  # -------------------------------------------------------------------------
+  # Judge aggregates
+  # -------------------------------------------------------------------------
+  - name: judge_recording
+    interval: 30s
+    rules:
+      - record: judge:submissions_per_minute:5m
+        expr: sum(rate(judge_submission_total[5m])) * 60
+
+      - record: judge:avg_runtime_seconds:5m
+        expr: avg(rate(judge_submission_runtime_seconds_sum[5m]) / rate(judge_submission_runtime_seconds_count[5m]))
+
+      - record: judge:success_rate:5m
+        expr: |
+          sum(rate(judge_submission_total{status="accepted"}[5m]))
+            /
+          sum(rate(judge_submission_total[5m]))
+
+      - record: judge:queue_depth
+        expr: rq_jobs_queue_size
+
+      - record: judge:worker_utilization:5m
+        expr: |
+          sum(rate(rq_jobs_processed_total[5m]))
+            /
+          (sum(rq_workers_active) * 4)
+          # 4 = avg concurrency per worker (configurable)
+
+  # -------------------------------------------------------------------------
+  # Host aggregates
+  # -------------------------------------------------------------------------
+  - name: host_recording
+    interval: 30s
+    rules:
+      - record: host:cpu_usage:5m
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      - record: host:memory_usage:5m
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+      - record: host:disk_usage:5m
+        expr: |
+          (1 - (node_filesystem_avail_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"})) * 100

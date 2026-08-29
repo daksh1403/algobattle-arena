@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" font-family="Menlo, Monaco, Consolas, monospace" font-size="13">
+  <defs>
+    <style>
+      .box { fill: #1C2230; stroke: #3A4458; stroke-width: 1.5; rx: 8; }
+      .label { fill: #E6EDF3; font-weight: bold; }
+      .sub { fill: #7D8590; font-size: 11px; }
+      .edge { fill: none; stroke: #FFA116; stroke-width: 2; marker-end: url(#arrow); }
+      .edge-g { fill: none; stroke: #2EA043; stroke-width: 2; marker-end: url(#arrow-g); }
+      .t { fill: #B8C2CC; font-size: 11px; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FFA116"/>
+    </marker>
+    <marker id="arrow-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2EA043"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#2EA043">AlgoBattle — Production-Scalable Backend (backend/app/)</text>
+
+  <!-- Browser -->
+  <rect class="box" x="30" y="70" width="130" height="70"/>
+  <text class="label" x="95" y="100" text-anchor="middle">Browser</text>
+  <text class="sub" x="95" y="120" text-anchor="middle">WebSocket client</text>
+
+  <!-- FastAPI -->
+  <rect class="box" x="300" y="50" width="220" height="110"/>
+  <text class="label" x="410" y="75" text-anchor="middle">FastAPI (uvicorn/gunicorn)</text>
+  <text class="sub" x="410" y="95" text-anchor="middle">auth · problems · contests</text>
+  <text class="sub" x="410" y="110" text-anchor="middle">submissions · leaderboard</text>
+  <text class="sub" x="410" y="125" text-anchor="middle">rate-limit (slowapi)</text>
+  <text class="sub" x="410" y="140" text-anchor="middle">stuck-sweeper (APScheduler)</text>
+
+  <!-- Postgres -->
+  <rect class="box" x="610" y="60" width="140" height="80"/>
+  <text class="label" x="680" y="90" text-anchor="middle">PostgreSQL</text>
+  <text class="sub" x="680" y="110" text-anchor="middle">users · problems</text>
+  <text class="sub" x="680" y="124" text-anchor="middle">submissions · contests</text>
+
+  <!-- Redis -->
+  <rect class="box" x="610" y="200" width="140" height="80"/>
+  <text class="label" x="680" y="228" text-anchor="middle">Redis</text>
+  <text class="sub" x="680" y="248" text-anchor="middle">RQ queue · ZSET leaderboard</text>
+  <text class="sub" x="680" y="262" text-anchor="middle">pub/sub → WebSocket</text>
+
+  <!-- RQ worker -->
+  <rect class="box" x="300" y="240" width="220" height="80"/>
+  <text class="label" x="410" y="268" text-anchor="middle">RQ Worker(s)</text>
+  <text class="sub" x="410" y="288" text-anchor="middle">stateless, scale horizontally</text>
+  <text class="sub" x="410" y="302" text-anchor="middle">judge_submission()</text>
+
+  <!-- Judge0 -->
+  <rect class="box" x="300" y="400" width="220" height="80"/>
+  <text class="label" x="410" y="430" text-anchor="middle">Judge0 (Docker)</text>
+  <text class="sub" x="410" y="450" text-anchor="middle">IOI isolate · cgroups sandbox</text>
+  <text class="sub" x="410" y="464" text-anchor="middle">no-network execution</text>
+
+  <!-- Edges -->
+  <path class="edge" d="M160,100 C220,100 240,105 298,105"/>
+  <text class="t" x="230" y="92" text-anchor="middle">HTTPS + JWT</text>
+
+  <path class="edge" d="M520,90 L608,90"/>
+  <text class="t" x="564" y="80" text-anchor="middle">SQLAlchemy async</text>
+
+  <path class="edge" d="M520,240 C560,240 560,250 608,250"/>
+  <text class="t" x="564" y="230" text-anchor="middle">enqueue / ZSET</text>
+
+  <path class="edge" d="M410,160 L410,238"/>
+  <text class="t" x="425" y="205" text-anchor="middle">pull job</text>
+
+  <path class="edge-g" d="M410,322 L410,398"/>
+  <text class="t" x="425" y="365" text-anchor="middle">submit + poll (httpx)</text>
+
+  <path class="edge" d="M300,270 C260,270 200,240 180,175 C170,140 160,120 160,110" style="fill:none;stroke:#58A6FF;stroke-width:2;stroke-dasharray:5 3"/>
+  <text class="t" x="150" y="180" text-anchor="middle" fill="#58A6FF">WS live status</text>
+
+  <text x="450" y="512" text-anchor="middle" fill="#4D5564" font-size="11">Scale story: add RQ workers → parallel judging. Redis ZSET = O(log n) leaderboard. Stuck-sweeper recovers from crashes.</text>
+</svg>

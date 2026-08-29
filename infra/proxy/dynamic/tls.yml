@@ -1,0 +1,30 @@
+# ============================================================================
+# Traefik — TLS Defaults
+# ----------------------------------------------------------------------------
+# Apply modern TLS settings to every router that uses TLS.
+# ============================================================================
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+        - CurveP256
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+
+    mintls13:
+      minVersion: VersionTLS13
+      sniStrict: true
+
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/localhost.crt
+        keyFile: /etc/traefik/certs/localhost.key

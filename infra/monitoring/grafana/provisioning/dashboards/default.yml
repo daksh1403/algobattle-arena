@@ -1,0 +1,20 @@
+# ============================================================================
+# Grafana — dashboard provider
+# ----------------------------------------------------------------------------
+# Tells Grafana to load any *.json from /var/dashboards (mounted from
+# ./dashboards-json) and refresh them when files change on disk.
+# ============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: "algobattle"
+    orgId: 1
+    folder: "Algobattle"
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/dashboards
+      foldersFromFilesStructure: false

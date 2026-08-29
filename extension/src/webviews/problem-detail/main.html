@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Algobattle · Problem Browser</title>
+  </head>
+  <body>
+    <main class="layout">
+      <aside class="sidebar">
+        <header>
+          <h1>Problems</h1>
+          <input id="search" placeholder="Search…" type="search" />
+        </header>
+        <nav id="sections"></nav>
+      </aside>
+      <section class="detail">
+        <article id="placeholder">
+          <h2>Select a problem</h2>
+          <p>Pick one from the sidebar to view its statement, samples, and code editor.</p>
+        </article>
+        <article id="detail" hidden>
+          <header class="detail-header">
+            <h2 id="title"></h2>
+            <span class="difficulty" id="difficulty"></span>
+          </header>
+          <section class="statement" id="statement"></section>
+          <section class="samples">
+            <h3>Samples</h3>
+            <ol id="samples"></ol>
+          </section>
+          <section class="editor">
+            <header>
+              <h3>Solution</h3>
+              <div class="actions">
+                <button id="run-btn" type="button">▶ Test</button>
+                <button id="submit-btn" type="button" class="primary">✓ Submit</button>
+                <span id="status" class="status"></span>
+              </div>
+            </header>
+            <textarea id="code" spellcheck="false" autocomplete="off"></textarea>
+            <section class="results" id="results" hidden>
+              <h3>Results</h3>
+              <ol id="result-list"></ol>
+            </section>
+          </section>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

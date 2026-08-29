@@ -1,0 +1,112 @@
+{
+  "annotations": {"list": []},
+  "description": "Leaderboard activity: daily active competitors, submission velocity, top solvers.",
+  "editable": true,
+  "uid": "algobattle-leaderboard",
+  "title": "Algobattle — Leaderboard",
+  "tags": ["algobattle", "business"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {"from": "now-7d", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {"text": "Prometheus", "value": "Prometheus"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total users",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "algobattle_users_total", "refId": "A", "legendFormat": "users"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Submissions today",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(increase(judge_submission_total[24h]))", "refId": "A", "legendFormat": "today"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Problems solved (unique)",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "algobattle_problems_solved_total", "refId": "A", "legendFormat": "solved"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "DAU",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "algobattle_dau", "refId": "A", "legendFormat": "dau"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "options": {"colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Submissions per day",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(increase(judge_submission_total[1d]))", "refId": "A", "legendFormat": "total"},
+        {"expr": "sum(increase(judge_submission_total{status=\"accepted\"}[1d]))", "refId": "B", "legendFormat": "accepted"}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "bars", "fillOpacity": 50}}}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Languages used",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(increase(judge_submission_total[1d])) by (language)", "refId": "A", "legendFormat": "{{language}}"}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"drawStyle": "bars", "stacking": {"mode": "normal"}}}}
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Top problems (submissions)",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {
+          "expr": "topk(20, sum(increase(judge_submission_total[7d])) by (problem_id))",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {"showHeader": true, "sortBy": [{"displayName": "Value", "desc": true}]}
+    }
+  ]
+}

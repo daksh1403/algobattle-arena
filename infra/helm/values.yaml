@@ -1,0 +1,349 @@
+# ============================================================================
+# Algobattle Helm chart — cost-effective defaults
+# ----------------------------------------------------------------------------
+# Override per environment with `-f values-prod.yaml`.
+# Single namespace install:  helm install algobattle . -n algobattle
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Global
+# ----------------------------------------------------------------------------
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  pullPolicy: IfNotPresent
+  # Set this to your actual GHCR org via --set or values-override.yaml
+  repository: your-org/algobattle-api
+  tag: latest
+  pullSecrets:
+    - name: ghcr-pull-secret
+
+# Image per component — overrides .image.*
+images:
+  api: ghcr.io/your-org/algobattle-api
+  judge: ghoc.io/your-org/algobattle-judge
+  judge0: judge0/judge0:1.13.1
+  frontend: ghcr.io/your-org/algobattle-frontend
+  postgres: postgres:16-alpine
+  redis: redis:7-alpine
+  prometheus: prom/prometheus:v2.55.0
+  grafana: grafana/grafana:11.2.0
+  postgresExporter: prometheuscommunity/postgres-exporter:v0.15.0
+  redisExporter: oliver006/redis_exporter:v1.62.0
+  nodeExporter: prom/node-exporter:v1.8.2
+
+# ----------------------------------------------------------------------------
+# API
+# ----------------------------------------------------------------------------
+api:
+  replicaCount: 2
+  image: ghcr.io/your-org/algobattle-api:latest
+  port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false   # API scales with HPA only if you turn this on
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    LOG_LEVEL: info
+    ENVIRONMENT: production
+    API_WORKERS: "2"
+    RQ_QUEUE_NAME: submissions
+    CORS_ORIGINS: "https://algobattle.example.com"
+  envFromSecret: algobattle-secrets
+  livenessProbe:
+    httpGet: { path: /health, port: http }
+    initialDelaySeconds: 30
+    periodSeconds: 15
+  readinessProbe:
+    httpGet: { path: /health, port: http }
+    initialDelaySeconds: 10
+    periodSeconds: 5
+  serviceAccount: algobattle-api
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: [ALL]
+
+# ----------------------------------------------------------------------------
+# Judge workers
+# ----------------------------------------------------------------------------
+judge:
+  replicaCount: 2
+  image: ghcr.io/your-org/algobattle-judge:latest
+  concurrency: 4
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 70
+    # Custom metric — Prometheus adapter must be installed for this to work
+    targetQueueDepth: "100"
+  env:
+    LOG_LEVEL: info
+    JUDGE_WORKER_CONCURRENCY: "4"
+    RQ_QUEUE_NAME: submissions
+  envFromSecret: algobattle-secrets
+  serviceAccount: algobattle-judge
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10002
+    runAsGroup: 10002
+    fsGroup: 10002
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: [ALL]
+
+# ----------------------------------------------------------------------------
+# Frontend
+# ----------------------------------------------------------------------------
+frontend:
+  replicaCount: 2
+  image: ghcr.io/your-org/algobattle-frontend:latest
+  port: 3000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  env:
+    NEXT_PUBLIC_API_BASE: /api
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10003
+    runAsGroup: 10003
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# ----------------------------------------------------------------------------
+# Postgres — StatefulSet, single instance for cost
+# ----------------------------------------------------------------------------
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: gp3
+    accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Use a managed RDS in production — disable this and set DATABASE_URL via secret
+  useExternal: false
+  external:
+    host: ""
+    port: 5432
+    database: algobattle
+  podSecurityContext:
+    runAsNonRoot: false   # postgres image runs as uid 999 (postgres user)
+    fsGroup: 999
+  auth:
+    existingSecret: algobattle-secrets
+    usernameKey: postgres-user
+    passwordKey: postgres-password
+
+# ----------------------------------------------------------------------------
+# Redis — single replica, persistent
+# ----------------------------------------------------------------------------
+redis:
+  enabled: true
+  image: redis:7-alpine
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: gp3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  auth:
+    existingSecret: algobattle-secrets
+    passwordKey: redis-password
+
+# ----------------------------------------------------------------------------
+# Judge0 — runs as a StatefulSet (workers need stable identity)
+# ----------------------------------------------------------------------------
+# SECURITY NOTE: Judge0 workers need privileged=true for cgroups/isolate.
+# We mitigate with a custom seccomp profile mounted from a ConfigMap.
+judge0:
+  enabled: true
+  server:
+    image: judge0/judge0:1.13.1
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    podSecurityContext:
+      runAsNonRoot: false
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        add: [NET_ADMIN]   # needed for isolate
+        drop: [ALL]
+  workers:
+    image: judge0/judge0:1.13.1
+    replicaCount: 1
+    # Privileged is REQUIRED for cgroup management. We restrict every
+    # other capability and pin to a custom seccomp profile.
+    privileged: true
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    securityContext:
+      allowPrivilegeEscalation: true    # required
+      capabilities:
+        add: [SYS_ADMIN]                # required for cgroups
+        drop: [ALL]
+    seccompProfile: judge0-restricted
+  isolationConfig: |
+    max-cpu-time=5
+    max-wall-time=10
+    max-memory=256000
+    max-stack-size=128000
+    max-output-size=65536
+    max-processes=64
+    enable-per-process-and-thread-resource-limits=true
+    enable-network=false
+    box-extra-rules=|
+  auth:
+    postgresPasswordKey: judge0-postgres-password
+    redisPasswordKey: judge0-redis-password
+    callbackTokenKey: judge0-auth-token
+  persistence:
+    size: 20Gi
+    storageClass: gp3
+
+# ----------------------------------------------------------------------------
+# Monitoring — Prometheus + Grafana (Alertmanager optional)
+# ----------------------------------------------------------------------------
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    retention: 15d
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: gp3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  grafana:
+    enabled: true
+    adminUser: admin
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: gp3
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  exporters:
+    nodeExporter: true
+    postgresExporter: true
+    redisExporter: true
+
+# ----------------------------------------------------------------------------
+# Ingress
+# ----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx     # or 'traefik' if you prefer
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 16m
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: algobattle.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: algobattle-tls
+      hosts:
+        - algobattle.example.com
+
+# ----------------------------------------------------------------------------
+# Pod Disruption Budgets
+# ----------------------------------------------------------------------------
+podDisruptionBudget:
+  api:
+    minAvailable: 1
+  judge:
+    minAvailable: 1
+  frontend:
+    minAvailable: 1
+  prometheus:
+    minAvailable: 1
+
+# ----------------------------------------------------------------------------
+# Service accounts
+# ----------------------------------------------------------------------------
+serviceAccounts:
+  api:
+    create: true
+    name: algobattle-api
+  judge:
+    create: true
+    name: algobattle-judge
+  judge0:
+    create: true
+    name: algobattle-judge0
+  prometheus:
+    create: true
+    name: algobattle-prometheus

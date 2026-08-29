@@ -1,0 +1,13 @@
+out/
+src/
+test/
+resources/README-cover.png
+.gitignore
+.esbuild.cache/
+.vscode/
+node_modules/
+**/*.map
+**/*.ts
+tsconfig.json
+esbuild.config.mjs
+CHANGELOG.md

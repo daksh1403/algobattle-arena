@@ -1,0 +1,17 @@
+# ============================================================================
+# CODEOWNERS — required reviewers per area
+# ============================================================================
+
+# Global owners
+*                                       @algobattle/platform-team
+
+# Infra changes need explicit platform approval
+/infra/terraform/                        @algobattle/platform-team @algobattle/sre
+/infra/helm/                            @algobattle/platform-team @algobattle/sre
+/infra/docker-compose.yml               @algobattle/platform-team
+/infra/proxy/                           @algobattle/sre
+/infra/monitoring/                      @algobattle/sre
+/infra/scripts/                         @algobattle/platform-team
+
+# CI/CD
+/.github/                               @algobattle/platform-team

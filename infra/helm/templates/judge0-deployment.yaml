@@ -1,0 +1,355 @@
+{{- if .Values.judge0.enabled }}
+{{- /*
+  Judge0 — Runs as a StatefulSet.
+
+  SECURITY:
+    * The `server` runs unprivileged (no cgroups needed).
+    * The `workers` MUST run privileged for cgroups/isolate. We mitigate
+      by:
+        1. Dropping ALL capabilities, then re-adding only SYS_ADMIN.
+        2. Running in a dedicated node pool with the
+           "judge0=true:NoSchedule" taint (via nodeSelector).
+        3. Restricting to a custom seccomp profile
+           "judge0-restricted" (deployed as a SeccompProfile CRD).
+    * The IsolateConfig is mounted read-only from a ConfigMap so we can
+      version-control the resource limits.
+*/ -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0-isolation
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0") | nindent 4 }}
+data:
+  isolate.conf: |-
+    {{- .Values.judge0.isolationConfig | nindent 4 }}
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0") | nindent 4 }}
+spec:
+  serviceName: {{ include "algobattle.fullname" . }}-judge0
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge0") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge0") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2358"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ .Values.serviceAccounts.judge0.name | default "algobattle-judge0" }}
+      # Run on dedicated nodes only
+      nodeSelector:
+        workload-class: judge0
+      tolerations:
+        - key: judge0
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: false   # judge0 image uses root
+      containers:
+        - name: server
+          image: {{ .Values.judge0.server.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/api/docker-entrypoint.sh"]
+          env:
+            - name: POSTGRES_HOST
+              value: {{ include "algobattle.fullname" . }}-judge0-db
+            - name: POSTGRES_DB
+              value: judge0db
+            - name: POSTGRES_USER
+              value: judge0
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.postgresPasswordKey | default "judge0-postgres-password" }}
+            - name: REDIS_HOST
+              value: {{ include "algobattle.fullname" . }}-judge0-redis
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.redisPasswordKey | default "judge0-redis-password" }}
+            - name: CALLBACK_URL
+              value: "http://{{ include "algobattle.fullname" . }}-api/api/internal/submissions/judge0-callback"
+            - name: CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.callbackTokenKey | default "judge0-auth-token" }}
+            - name: ALLOW_ENABLE_NETWORK
+              value: "false"
+            - name: DISABLE_AUTHN
+              value: "true"   # internal-only — API handles auth
+            - name: MAX_CPU_TIME_LIMIT
+              value: "20"
+            - name: MAX_WALL_TIME_LIMIT
+              value: "30"
+            - name: MAX_MEMORY_LIMIT
+              value: "512000"
+          ports:
+            - name: http
+              containerPort: 2358
+              protocol: TCP
+          livenessProbe:
+            httpGet: { path: /about, port: http }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /about, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.judge0.server.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+
+        - name: workers
+          image: {{ .Values.judge0.workers.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/judge0-workers/docker-entrypoint.sh"]
+          # Privilege is REQUIRED for cgroup/isolate management.
+          privileged: {{ .Values.judge0.workers.privileged | default true }}
+          env:
+            - name: POSTGRES_HOST
+              value: {{ include "algobattle.fullname" . }}-judge0-db
+            - name: POSTGRES_DB
+              value: judge0db
+            - name: POSTGRES_USER
+              value: judge0
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.postgresPasswordKey | default "judge0-postgres-password" }}
+            - name: REDIS_HOST
+              value: {{ include "algobattle.fullname" . }}-judge0-redis
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.redisPasswordKey | default "judge0-redis-password" }}
+            - name: ALLOW_ENABLE_NETWORK
+              value: "false"
+            - name: MAX_CPU_TIME_LIMIT
+              value: "20"
+            - name: MAX_WALL_TIME_LIMIT
+              value: "30"
+          ports:
+            - name: metrics
+              containerPort: 2358
+          resources:
+            {{- toYaml .Values.judge0.workers.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: true   # required for cgroup init
+            capabilities:
+              add: [SYS_ADMIN]
+              drop: [ALL]
+            seccompProfile:
+              type: Localhost
+              localhostProfile: judge0-restricted.json
+          volumeMounts:
+            - name: isolate-config
+              mountPath: /judge0/IsolateConfig
+              readOnly: true
+
+      volumes:
+        - name: isolate-config
+          configMap:
+            name: {{ include "algobattle.fullname" . }}-judge0-isolation
+            items:
+              - key: isolate.conf
+                path: isolate.conf
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ .Values.judge0.persistence.size | default "20Gi" }}
+        {{- if .Values.judge0.persistence.storageClass }}
+        storageClassName: {{ .Values.judge0.persistence.storageClass }}
+        {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 2358
+      targetPort: http
+  selector:
+    {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge0") | nindent 4 }}
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0-db
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0-db") | nindent 4 }}
+spec:
+  serviceName: {{ include "algobattle.fullname" . }}-judge0-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: judge0-db
+      app.kubernetes.io/name: {{ include "algobattle.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: judge0-db
+        app.kubernetes.io/name: {{ include "algobattle.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:13-alpine
+          env:
+            - name: POSTGRES_USER
+              value: judge0
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.postgresPasswordKey | default "judge0-postgres-password" }}
+            - name: POSTGRES_DB
+              value: judge0db
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+        {{- if .Values.judge0.persistence.storageClass }}
+        storageClassName: {{ .Values.judge0.persistence.storageClass }}
+        {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0-db
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0-db") | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app.kubernetes.io/component: judge0-db
+    app.kubernetes.io/name: {{ include "algobattle.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0-redis
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0-redis") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: judge0-redis
+      app.kubernetes.io/name: {{ include "algobattle.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: judge0-redis
+        app.kubernetes.io/name: {{ include "algobattle.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:6-alpine
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --maxmemory
+            - 128mb
+            - --maxmemory-policy
+            - noeviction
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "algobattle.secretName" . }}
+                  key: {{ .Values.judge0.auth.redisPasswordKey | default "judge0-redis-password" }}
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 192Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge0-redis
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge0-redis") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app.kubernetes.io/component: judge0-redis
+    app.kubernetes.io/name: {{ include "algobattle.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

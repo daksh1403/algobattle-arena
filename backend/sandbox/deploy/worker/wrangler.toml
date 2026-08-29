@@ -1,0 +1,20 @@
+name = "algobattle-arena"
+main = "index.js"
+compatibility_date = "2025-08-29"
+
+# Judge backend origin — set via `wrangler secret put`:
+#   wrangler secret put TUNNEL_URL --name "https://judge-xxx.trycloudflare.com"
+# (BACKEND_URL is the local fallback for dev)
+
+[vars]
+BACKEND_URL = "http://127.0.0.1:8080"
+
+# Static frontend served directly by the Worker
+[assets]
+directory = "../public"
+binding = "ASSETS"
+
+# Cloud-persistent leaderboard (survives backend restarts / outages)
+[[kv_namespaces]]
+binding = "ALGOBATTLE"
+id = "29b47f1a925444df9aabbc6eb7e82238"

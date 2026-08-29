@@ -1,0 +1,103 @@
+# ============================================================================
+# Prometheus — main config
+# ----------------------------------------------------------------------------
+# Scrapes every service in the algobattle stack. Two scrape intervals:
+#   * 15s for app-internal metrics (API, workers, judge0)
+#   * 30s for external / OS-level (node_exporter, postgres, redis, traefik)
+# ============================================================================
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: "algobattle"
+    environment: "production"
+
+rule_files:
+  - "/etc/prometheus/alerts/*.yml"
+  - "/etc/prometheus/rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
+scrape_configs:
+  # -------------------------------------------------------------------------
+  # Prometheus itself
+  # -------------------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: prometheus
+
+  # -------------------------------------------------------------------------
+  # Node exporter — host-level metrics
+  # -------------------------------------------------------------------------
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: node-exporter
+
+  # -------------------------------------------------------------------------
+  # Traefik — request counts, latencies, status codes per router
+  # -------------------------------------------------------------------------
+  - job_name: traefik
+    static_configs:
+      - targets: ["proxy:8082"]
+        labels:
+          service: traefik
+    metrics_path: /metrics
+
+  # -------------------------------------------------------------------------
+  # API — FastAPI prometheus client + auto-instrumentator
+  # -------------------------------------------------------------------------
+  - job_name: algobattle-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          service: api
+          component: backend
+
+  # -------------------------------------------------------------------------
+  # Judge worker — RQ + custom metrics on :9100/metrics
+  # -------------------------------------------------------------------------
+  - job_name: algobattle-judge
+    static_configs:
+      - targets: ["judge-worker:9100"]
+        labels:
+          service: judge-worker
+          component: worker
+
+  # -------------------------------------------------------------------------
+  # Postgres exporter
+  # -------------------------------------------------------------------------
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          service: postgres
+
+  # -------------------------------------------------------------------------
+  # Redis exporter
+  # -------------------------------------------------------------------------
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          service: redis
+
+  # -------------------------------------------------------------------------
+  # Judge0 — only present when running judge0 compose alongside
+  # -------------------------------------------------------------------------
+  - job_name: judge0
+    static_configs:
+      - targets: ["judge0-server:2358"]
+        labels:
+          service: judge0
+    metrics_path: /metrics

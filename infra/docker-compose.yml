@@ -1,0 +1,554 @@
+# ============================================================================
+# Algobattle — Production Docker Compose (single-host)
+# ----------------------------------------------------------------------------
+# Stack:
+#   proxy      — Traefik (reverse proxy, Let's Encrypt, rate-limit)
+#   api        — FastAPI / gunicorn
+#   judge-worker — RQ workers consuming Redis queue
+#   postgres   — DB
+#   redis      — queue + cache
+#   frontend   — Next.js (Nginx-served)
+#   monitoring — Prometheus + Grafana + Loki + node-exporter + alertmanager
+#   judge0-*   — pulled in via `make prod-full` (isolated compose)
+# ----------------------------------------------------------------------------
+# Usage:
+#   make prod       — this file only (no judge0)
+#   make prod-full  — also brings up Judge0 (see judge0/docker-compose.judge0.yml)
+# ============================================================================
+
+version: "3.9"
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-restart: &default-restart
+  restart: unless-stopped
+
+networks:
+  backend:
+    driver: bridge
+    name: algobattle-backend
+  frontend:
+    driver: bridge
+    name: algobattle-frontend
+  monitoring:
+    driver: bridge
+    name: algobattle-monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+# ---------------------------------------------------------------------------
+# Proxy — Traefik
+# ---------------------------------------------------------------------------
+services:
+  proxy:
+    image: traefik:v3.1
+    container_name: algobattle-proxy
+    <<: *default-restart
+    logging: *default-logging
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.http.address=:80"
+      - "--entrypoints.http.http.redirections.entryPoint.to=https"
+      - "--entrypoints.http.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.https.address=:443"
+      - "--entrypoints.https.http.tls=true"
+      - "--entrypoints.https.http.tls.certresolver=letsencrypt"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=http"
+      - "--api=true"
+      - "--api.dashboard=${TRAEFIK_DASHBOARD:-true}"
+      - "--api.insecure=false"
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entrypoint=metrics"
+      - "--entrypoints.metrics.address=:8082"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8082:8082"   # Prometheus metrics for Traefik itself
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./proxy/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./proxy/dynamic:/etc/traefik/dynamic:ro
+      - traefik_letsencrypt:/letsencrypt
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # -------------------------------------------------------------------------
+  # Frontend — Next.js (Nginx-served static build)
+  # -------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../api/Dockerfile
+    # NOTE: in this infra repo we don't build the frontend — it's a sibling
+    # project. For local dev, set IMAGE_FRONTEND to the actual image built by
+    # `docker build -t algobattle-frontend:latest ./frontend`. If the image
+    # doesn't exist yet, this service will fail to start — that's expected.
+    image: ${IMAGE_FRONTEND:-algobattle-frontend:latest}
+    container_name: algobattle-frontend
+    <<: *default-restart
+    logging: *default-logging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.frontend.entrypoints=https"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend.priority=10"
+    environment:
+      - NEXT_PUBLIC_API_BASE=/api
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # -------------------------------------------------------------------------
+  # API — FastAPI / gunicorn
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: ${IMAGE_API:-algobattle-api:latest}
+    container_name: algobattle-api
+    <<: *default-restart
+    logging: *default-logging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=https"
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.api-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.api.middlewares=api-strip,default-headers@file"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JUDGE0_URL=${JUDGE0_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - JUDGE_CALLBACK_URL=${JUDGE_CALLBACK_URL}
+    networks:
+      - backend
+      - monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # Judge worker — RQ
+  # -------------------------------------------------------------------------
+  judge-worker:
+    build:
+      context: ./judge
+      dockerfile: Dockerfile
+    image: ${IMAGE_JUDGE:-algobattle-judge:latest}
+    container_name: algobattle-judge-worker
+    <<: *default-restart
+    logging: *default-logging
+    env_file: .env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - RQ_QUEUE_NAME=${RQ_QUEUE_NAME:-submissions}
+      - JUDGE_WORKER_CONCURRENCY=${JUDGE_WORKER_CONCURRENCY:-4}
+      - JUDGE0_URL=${JUDGE0_URL}
+      - JUDGE_CALLBACK_URL=${JUDGE_CALLBACK_URL}
+      - JUDGE_HTTP_TIMEOUT=${JUDGE_HTTP_TIMEOUT:-30}
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prom_multiproc
+    networks:
+      - backend
+      - monitoring
+    healthcheck:
+      # RQ worker with --burst-idle checks process aliveness via heartbeat
+      test: ["CMD-SHELL", "python -c \"import redis,json,sys; r=redis.Redis.from_url('${REDIS_URL}'); k=r.keys('rq:worker:*'); sys.exit(0 if k else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    volumes:
+      - prom_multiproc_worker:/tmp/prom_multiproc
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # Postgres
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: algobattle-postgres
+    <<: *default-restart
+    logging: *default-logging
+    # NO published port in prod — only via internal network
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-algobattle}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-algobattle}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "log_min_duration_statement=500ms"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-algobattle} -d ${POSTGRES_DB:-algobattle}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # -------------------------------------------------------------------------
+  # Redis
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: algobattle-redis
+    <<: *default-restart
+    logging: *default-logging
+    expose:
+      - "6379"
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?set in .env}"
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--save"
+      - "60"
+      - "100"
+      - "--appendonly"
+      - "yes"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+
+  # -------------------------------------------------------------------------
+  # Postgres exporter
+  # -------------------------------------------------------------------------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: algobattle-postgres-exporter
+    <<: *default-restart
+    logging: *default-logging
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-algobattle}:${POSTGRES_PASSWORD:?set in .env}@postgres:5432/${POSTGRES_DB:-algobattle}?sslmode=disable
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # -------------------------------------------------------------------------
+  # Redis exporter
+  # -------------------------------------------------------------------------
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: algobattle-redis-exporter
+    <<: *default-restart
+    logging: *default-logging
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?set in .env}
+    networks:
+      - monitoring
+      - backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # -------------------------------------------------------------------------
+  # node-exporter — host metrics for Prometheus
+  # -------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: algobattle-node-exporter
+    <<: *default-restart
+    logging: *default-logging
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - "/:/host:ro,rslave"
+    expose:
+      - "9100"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # -------------------------------------------------------------------------
+  # Prometheus
+  # -------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: algobattle-prometheus
+    <<: *default-restart
+    logging: *default-logging
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    expose:
+      - "9090"
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/prometheus`)"
+      - "traefik.http.routers.prometheus.entrypoints=https"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.prometheus-strip.stripprefix.prefixes=/prometheus"
+      - "traefik.http.routers.prometheus.middlewares=prometheus-strip,default-headers@file"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    depends_on:
+      - alertmanager
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # -------------------------------------------------------------------------
+  # Alertmanager
+  # -------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: algobattle-alertmanager
+    <<: *default-restart
+    logging: *default-logging
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    expose:
+      - "9093"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # -------------------------------------------------------------------------
+  # Loki — logs
+  # -------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: algobattle-loki
+    <<: *default-restart
+    logging: *default-logging
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # -------------------------------------------------------------------------
+  # Promtail — log shipper
+  # -------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: algobattle-promtail
+    <<: *default-restart
+    logging: *default-logging
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/loki/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  # -------------------------------------------------------------------------
+  # Grafana
+  # -------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: algobattle-grafana
+    <<: *default-restart
+    logging: *default-logging
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SERVER_ROOT_URL=https://${DOMAIN:-localhost}/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards-json:/var/dashboards:ro
+    expose:
+      - "3000"
+    networks:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=https"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.grafana-strip.stripprefix.prefixes=/grafana"
+      - "traefik.http.routers.grafana.middlewares=grafana-strip,default-headers@file"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    depends_on:
+      - prometheus
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  traefik_letsencrypt:
+  prom_multiproc_worker:

@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+.venv
+venv
+deploy
+tests
+arena_data.json
+*.log

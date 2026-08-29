@@ -1,0 +1,106 @@
+# ============================================================================
+# Algobattle — Dev Compose Override
+# ----------------------------------------------------------------------------
+# Use:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Or:  make dev
+#
+# What it does:
+#   * exposes postgres + redis on host ports (for IDEs / debuggers)
+#   * mounts the backend / frontend / judge source for hot reload
+#   * API debug log level, single uvicorn worker (for tracebacks)
+#   * Adds adminer for browsing the DB
+#   * Disables TLS in Traefik (we're on localhost)
+# ============================================================================
+
+services:
+  api:
+    build:
+      target: dev
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=development
+    volumes:
+      - ../backend:/app:rw
+    ports:
+      - "8000:8000"   # direct access for debugger
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  judge-worker:
+    build:
+      target: dev
+    command: ["rq", "worker", "--url", "${REDIS_URL}", "--worker-ttl", "600", "${RQ_QUEUE_NAME:-submissions}"]
+    volumes:
+      - ../judge:/app:rw
+    environment:
+      - LOG_LEVEL=debug
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  frontend:
+    # In dev we mount the frontend source and run the dev server with HMR.
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ../frontend:/app:rw
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+  postgres:
+    ports:
+      - "5432:5432"   # dev only — bind to localhost
+
+  redis:
+    ports:
+      - "6379:6379"   # dev only
+
+  proxy:
+    # Disable Let's Encrypt in dev — use plain HTTP on 80.
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.http.address=:80"
+      - "--api=true"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--log.level=DEBUG"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+      - "--entrypoints.metrics.address=:8082"
+    ports:
+      - "80:80"
+      - "8080:8080"   # Traefik dashboard
+      - "8082:8082"
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: algobattle-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DESIGN=pepper-lite
+    networks:
+      - backend
+    depends_on:
+      - postgres
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: algobattle-mailhog
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # Web UI
+      - "1025:1025"   # SMTP
+    networks:
+      - backend

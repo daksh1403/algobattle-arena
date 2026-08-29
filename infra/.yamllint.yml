@@ -1,0 +1,20 @@
+# ============================================================================
+# yamllint — keep YAML files consistent
+# ============================================================================
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  document-start:
+    present: false    # Helm/K8s YAML doesn't need ---
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false

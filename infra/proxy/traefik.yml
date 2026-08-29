@@ -1,0 +1,70 @@
+# ============================================================================
+# Traefik — Static Configuration
+# ----------------------------------------------------------------------------
+# Everything that should not change at runtime. Dynamic config (routers,
+# services, middlewares) lives in ./dynamic/ and is hot-reloaded.
+# ============================================================================
+
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+api:
+  dashboard: true
+  insecure: false   # dashboard only on :8080 in dev via override
+
+log:
+  level: INFO
+  format: common
+  filePath: ""
+  accessLog:
+    filePath: ""
+    format: common
+    fields:
+      defaultMode: keep
+      headers:
+        defaultMode: drop
+
+# File provider picks up ./dynamic/*.yml on startup and watches for changes
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: algobattle-backend
+    swarmMode: false
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+entryPoints:
+  http:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: https
+          scheme: https
+  https:
+    address: ":443"
+    http3:
+      advertisedPort: 443
+  metrics:
+    address: ":8082"
+
+# Let's Encrypt (overridden to insecure in dev compose)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "admin@example.com"
+      storage: "/letsencrypt/acme.json"
+      tlsChallenge: true
+      httpChallenge:
+        entryPoint: http
+
+# Metrics — emitted to Prometheus on :8082/metrics
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true

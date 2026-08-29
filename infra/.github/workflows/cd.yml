@@ -1,0 +1,205 @@
+# ============================================================================
+# CD — build, push, deploy on merge to main
+# ============================================================================
+name: cd
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "judge/**"
+      - "frontend/**"
+      - "infra/**"
+      - ".github/workflows/cd.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: cd-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/algobattle
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Build + push all images with the tag the deploy script expects
+  # -------------------------------------------------------------------------
+  build-and-push:
+    name: build + push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push API
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: |
+              ghcr.io/${{ github.repository_owner }}/algobattle-api:${{ steps.sha.outputs.short }}
+              ghcr.io/${{ github.repository_owner }}/algobattle-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Build + push Judge
+        uses: docker/build-push-action@v6
+        with:
+          context: ./judge
+          push: true
+          tags: |
+              ghcr.io/${{ github.repository_owner }}/algobattle-judge:${{ steps.sha.outputs.short }}
+              ghcr.io/${{ github.repository_owner }}/algobattle-judge:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Build + push Frontend (if Dockerfile exists)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+              ghcr.io/${{ github.repository_owner }}/algobattle-frontend:${{ steps.sha.outputs.short }}
+              ghcr.io/${{ github.repository_owner }}/algobattle-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+        continue-on-error: true
+
+  # -------------------------------------------------------------------------
+  # 2. Deploy to staging — single EC2 via SSH (zero-cost deploy)
+  # -------------------------------------------------------------------------
+  deploy-staging:
+    name: deploy / staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+              cd /opt/algobattle
+              export IMAGE_API=ghcr.io/${{ github.repository_owner }}/algobattle-api:${{ steps.sha.outputs.short }}
+              export IMAGE_JUDGE=ghcr.io/${{ github.repository_owner }}/algobattle-judge:${{ steps.sha.outputs.short }}
+              export IMAGE_FRONTEND=ghcr.io/${{ github.repository_owner }}/algobattle-frontend:${{ steps.sha.outputs.short }}
+              /home/ubuntu/algobattle/deploy.sh
+
+      - name: Smoke test staging
+        run: |
+          sleep 30
+          curl -fsS --max-time 10 https://${{ secrets.DEPLOY_HOST }}/health || \
+            curl -fsS --max-time 10 http://${{ secrets.DEPLOY_HOST }}/health
+          echo "Staging OK"
+
+  # -------------------------------------------------------------------------
+  # 3. Deploy to production — manual approval
+  # -------------------------------------------------------------------------
+  deploy-prod:
+    name: deploy / production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://${{ secrets.PROD_DOMAIN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+              cd /opt/algobattle
+              export IMAGE_API=ghcr.io/${{ github.repository_owner }}/algobattle-api:${{ github.sha }}
+              export IMAGE_JUDGE=ghcr.io/${{ github.repository_owner }}/algobattle-judge:${{ github.sha }}
+              export IMAGE_FRONTEND=ghcr.io/${{ github.repository_owner }}/algobattle-frontend:${{ github.sha }}
+              /home/ubuntu/algobattle/deploy.sh
+
+      - name: Smoke test production
+        run: |
+          sleep 60
+          curl -fsS --max-time 10 https://${{ secrets.PROD_DOMAIN }}/health
+
+      - name: Notify Slack
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+              {"text": "✅ Algobattle deployed to production\n • Commit: ${{ github.sha }}\n • By: ${{ github.actor }}\n • Run: ${{ github.run_id }}"}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+  # -------------------------------------------------------------------------
+  # 4. Helm deploy — for K8s clusters (separate from the EC2 path)
+  # -------------------------------------------------------------------------
+  deploy-helm:
+    name: deploy / helm
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event.inputs.environment == 'staging' && env.HELM_DEPLOY == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config set-context --current --namespace=algobattle
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install algobattle ./helm \
+            --namespace algobattle \
+            --create-namespace \
+            --set api.image=ghcr.io/${{ github.repository_owner }}/algobattle-api:${{ steps.sha.outputs.short }} \
+            --set judge.image=ghcr.io/${{ github.repository_owner }}/algobattle-judge:${{ steps.sha.outputs.short }} \
+            --set frontend.image=ghcr.io/${{ github.repository_owner }}/algobattle-frontend:${{ steps.sha.outputs.short }} \
+            --wait \
+            --timeout 10m

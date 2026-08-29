@@ -1,0 +1,87 @@
+#!/bin/bash
+# ============================================================================
+# Judge0 EC2 — userdata
+# ----------------------------------------------------------------------------
+# Pulls the official Judge0 v1.13 stack and runs it. The API EC2 reaches
+# this host on :2358 to submit code.
+# ============================================================================
+
+set -euo pipefail
+exec > /var/log/algobattle-judge0-bootstrap.log 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y --no-install-recommends \
+    ca-certificates curl git gnupg awscli jq
+
+# Docker
+if ! command -v docker >/dev/null 2>&1; then
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+fi
+
+mkdir -p /opt/judge0
+cd /opt/judge0
+
+# Fetch the official Judge0 v1.13 stack
+if [ ! -f docker-compose.yml ]; then
+    curl -fsSL https://raw.githubusercontent.com/judge0/judge0/v1.13.1/docker-compose.yml -o docker-compose.yml
+    curl -fsSL https://raw.githubusercontent.com/judge0/judge0/v1.13.1/judge0.conf -o judge0.conf
+    # Apply our isolation config
+    cat > isolate.conf <<EOF
+max-cpu-time=5
+max-wall-time=10
+max-memory=256000
+max-stack-size=128000
+max-output-size=65536
+max-processes=64
+enable-per-process-and-thread-resource-limits=true
+enable-network=false
+box-extra-rules=|
+EOF
+fi
+
+# Random passwords (overwritten by secrets push in real ops)
+cat > .env <<EOF
+POSTGRES_HOST=judge0-db
+POSTGRES_DB=judge0db
+POSTGRES_USER=judge0
+POSTGRES_PASSWORD=$(openssl rand -hex 32)
+REDIS_HOST=judge0-redis
+REDIS_PASSWORD=$(openssl rand -hex 32)
+ALLOW_ENABLE_NETWORK=false
+ALLOW_ENABLE_PER_PROCESS_AND_THREAD_RESOURCE_LIMITS=true
+DISABLE_AUTHN=true
+EOF
+
+chmod 600 .env
+
+# Systemd service
+cat > /etc/systemd/system/judge0.service <<'SYSTEMD'
+[Unit]
+Description=Judge0 cluster
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/judge0
+ExecStart=/usr/bin/docker compose -p judge0 up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -p judge0 down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+SYSTEMD
+
+systemctl daemon-reload
+systemctl enable judge0.service
+systemctl start judge0.service
+
+echo "Judge0 bootstrap complete at $(date -u)" > /var/log/algobattle-judge0-bootstrap.done

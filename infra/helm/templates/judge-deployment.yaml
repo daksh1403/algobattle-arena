@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge") | nindent 4 }}
+spec:
+  {{- if not .Values.judge.autoscaling.enabled }}
+  replicas: {{ .Values.judge.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge") | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 4
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ .Values.judge.serviceAccount | default "algobattle-judge" }}
+      securityContext:
+        {{- toYaml .Values.judge.podSecurityContext | nindent 8 }}
+      containers:
+        - name: judge
+          image: {{ .Values.judge.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "rq"
+            - "worker"
+            - "--url"
+            - "$(REDIS_URL)"
+            - "--name"
+            - "judge-$(POD_NAME)"
+            - "--with-scheduler"
+            - "$(RQ_QUEUE_NAME)"
+          env:
+            - name: REDIS_URL
+              value: {{ include "algobattle.redisUrl" . | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: /tmp/prom_multiproc
+            {{- range $key, $val := .Values.judge.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.judge.envFromSecret | default "algobattle-secrets" }}
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "wget -qO- http://localhost:9100/metrics | grep -q judge_submission"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.judge.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.judge.securityContext | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]   # let in-flight jobs finish
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      terminationGracePeriodSeconds: 60
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always

@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Env & data
+.env
+*.db
+*.sqlite3
+arena_data.json
+infra/.env
+
+# Node
+node_modules/
+dist/
+build/
+
+# Cloudflare / wrangler
+.wrangler/
+**/.wrangler/
+.dev.vars
+
+# Generated test data / debug artifacts
+backend/data/
+backend/demo_live.py
+backend/sandbox/tests/*_report.json
+backend/sandbox/tests/debug_*
+backend/sandbox/tests/stress_*
+backend/sandbox/tests/benchmark.py
+backend/sandbox/tests/run_million.py
+backend/sandbox/tests/tenk_tests.py
+backend/sandbox/tests/test_million.py
+backend/sandbox/tests/test_1000_unique.py
+backend/sandbox/tests/fast_1000.py
+backend/sandbox/tests/fast_stress.py
+backend/sandbox/tests/analyze_failures.py
+backend/sandbox/tests/problem_bank_runner.py
+backend/sandbox/tests/final_verify.py
+backend/sandbox/tests/quick_verify.py
+backend/sandbox/tests/rigorous_test.py
+backend/sandbox/tests/batch_tester.py
+backend/sandbox/tests/demo.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

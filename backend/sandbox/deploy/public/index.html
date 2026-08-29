@@ -1,0 +1,2709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlgoBattle — Compete on Efficiency</title>
+<style>
+:root{
+  /* Surfaces — three tiers for real depth without shadows */
+  --bg:           #0E1116;
+  --bg-elev:      #161B22;
+  --panel:        #1C2230;
+  --panel-2:      #232A3A;
+  --panel-3:      #2A3346;
+
+  /* Borders — three weights via lightness, never pure white */
+  --border:       #2A3242;
+  --border-soft:  #1F2533;
+  --border-strong:#3A4458;
+
+  /* Text — four steps of contrast */
+  --text:         #E6EDF3;
+  --text-2:       #B8C2CC;
+  --text-3:       #7D8590;
+  --text-4:       #4D5564;
+
+  /* Accent — single hue, used sparingly */
+  --accent:       #FFA116;
+  --accent-2:     #FFB84D;
+  --accent-soft:  rgba(255,161,22,0.12);
+
+  /* Status — four semantic colors */
+  --green:        #2EA043;
+  --green-soft:   rgba(46,160,67,0.14);
+  --red:          #F85149;
+  --red-soft:     rgba(248,81,73,0.14);
+  --yellow:       #D29922;
+  --yellow-soft:  rgba(210,153,34,0.14);
+  --blue:         #58A6FF;
+  --blue-soft:    rgba(88,166,255,0.14);
+  --purple:       #A371F7;
+  --purple-soft:  rgba(163,113,247,0.14);
+
+  /* Editor — slightly cooler than the rest */
+  --editor-bg:    #0B0F14;
+  --editor-gutter:#0A0E13;
+  --editor-line:  #1A2030;
+
+  /* Syntax */
+  --tk-kw:        #FF7B72;
+  --tk-str:       #A5D6FF;
+  --tk-num:       #79C0FF;
+  --tk-com:       #6E7681;
+  --tk-fn:        #D2A8FF;
+  --tk-text:      #E6EDF3;
+
+  /* Type */
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* Shadows */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-2: 0 4px 12px rgba(0,0,0,0.30);
+  --shadow-3: 0 16px 48px rgba(0,0,0,0.45);
+  --shadow-drawer: -12px 0 32px rgba(0,0,0,0.35);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:var(--font-ui); font-size:14px; line-height:1.5;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+body.modal-open{overflow:hidden}
+
+a{color:var(--blue); text-decoration:none}
+a:hover{text-decoration:underline}
+
+button{font-family:inherit; font-size:inherit; color:inherit}
+input,select,textarea{font-family:inherit; font-size:inherit; color:inherit}
+
+/* Custom scrollbars */
+*::-webkit-scrollbar{width:8px; height:8px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--text-4); border-radius:4px}
+*::-webkit-scrollbar-thumb:hover{background:var(--text-3)}
+*{scrollbar-width:thin; scrollbar-color:var(--text-4) transparent}
+
+/* Selection */
+::selection{background:var(--accent-soft); color:var(--text)}
+#code::selection{background:rgba(255,161,22,0.35); color:var(--text)}
+
+/* ============================================
+   TOPBAR
+   ============================================ */
+.topbar{
+  display:flex; align-items:center; gap:4px;
+  height:52px; padding:0 16px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  position:relative; z-index:50;
+}
+.brand{
+  display:flex; align-items:center; gap:8px;
+  padding-right:16px; margin-right:4px;
+  border-right:1px solid var(--border);
+  user-select:none;
+}
+.brand-icon{
+  width:26px; height:26px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, var(--accent-soft), rgba(255,161,22,0.04));
+  border:1px solid rgba(255,161,22,0.3);
+  border-radius:7px;
+  color:var(--accent);
+  box-shadow:0 0 12px rgba(255,161,22,0.15);
+}
+.brand-icon svg{width:15px; height:15px}
+.brand-name{font-weight:700; font-size:15px; letter-spacing:-0.2px; color:var(--text)}
+.brand-name em{font-style:normal; color:var(--accent)}
+
+.nav{display:flex; gap:2px; align-items:center}
+.nav-btn{
+  background:none; border:none; color:var(--text-3);
+  padding:8px 12px; font-size:13px; font-weight:500;
+  cursor:pointer; border-radius:6px; white-space:nowrap;
+  position:relative; transition:color .15s, background .15s;
+  display:inline-flex; align-items:center; gap:5px;
+}
+.nav-btn:hover{color:var(--text); background:var(--panel-2)}
+.nav-btn.active{color:var(--text); background:transparent}
+.nav-btn.active::after{
+  content:""; position:absolute; left:50%; bottom:-1px;
+  transform:translateX(-50%);
+  width:24px; height:2px; background:var(--accent);
+  border-radius:1px 1px 0 0;
+}
+
+.right{margin-left:auto; display:flex; align-items:center; gap:8px; white-space:nowrap}
+
+.status{
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:var(--text-3);
+  font-weight:500; padding:4px 10px;
+  border-radius:999px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  transition:border-color .2s, color .2s;
+}
+.status.online{color:var(--text-2); border-color:rgba(46,160,67,0.3)}
+.status.offline{color:var(--text-3); border-color:var(--border)}
+.dot{
+  width:7px; height:7px; border-radius:50%;
+  background:var(--text-3);
+  position:relative; flex-shrink:0;
+}
+.status.online .dot{background:var(--green)}
+.status.online .dot::after{
+  content:""; position:absolute; inset:-3px;
+  border-radius:50%; background:var(--green);
+  opacity:0.3; animation:pulse 1.8s ease-out infinite;
+}
+@keyframes pulse{0%{transform:scale(0.8); opacity:0.5}100%{transform:scale(1.6); opacity:0}}
+
+/* Buttons */
+.btn{
+  background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border);
+  padding:7px 14px; border-radius:6px;
+  font-size:12.5px; font-weight:600;
+  cursor:pointer; transition:all .12s ease;
+  display:inline-flex; align-items:center; gap:6px;
+  white-space:nowrap; line-height:1;
+}
+.btn:hover{border-color:var(--border-strong); background:var(--panel-3)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--accent-soft); outline-offset:1px}
+
+.btn.primary{
+  background:var(--accent); color:#1A1A1A;
+  border-color:var(--accent);
+}
+.btn.primary:hover{background:var(--accent-2); border-color:var(--accent-2); transform:translateY(-1px)}
+.btn.primary:active{transform:translateY(0)}
+
+.btn.success{
+  background:var(--green); color:#fff;
+  border-color:var(--green);
+}
+.btn.success:hover{background:#3CC460; border-color:#3CC460; transform:translateY(-1px)}
+.btn.success:active{transform:translateY(0)}
+
+.btn.ghost{background:transparent; border-color:transparent; color:var(--text-2)}
+.btn.ghost:hover{background:var(--panel-2); color:var(--text); border-color:transparent}
+
+.btn.small{padding:5px 11px; font-size:11.5px}
+.btn.icon{padding:7px; width:32px; height:32px; justify-content:center}
+.btn.danger{color:var(--red); border-color:var(--border)}
+.btn.danger:hover{background:var(--red-soft); border-color:var(--red)}
+
+.btn .icon-svg{width:12px; height:12px}
+.btn svg{display:inline-block; vertical-align:-2px}
+
+/* Auth button — when signed in shows avatar */
+.auth-btn{padding:5px 12px 5px 5px !important; display:inline-flex; align-items:center; gap:8px !important}
+.auth-avatar{
+  width:22px; height:22px; border-radius:50%;
+  background:var(--accent-soft);
+  color:var(--accent);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700;
+  border:1px solid rgba(255,161,22,0.3);
+  flex-shrink:0;
+}
+.auth-admin-dot{
+  width:6px; height:6px; border-radius:50%;
+  background:var(--accent);
+  display:inline-block; margin-left:4px;
+}
+
+/* ============================================
+   LAYOUT
+   ============================================ */
+.main{
+  display:grid; grid-template-columns:280px 1fr;
+  height:calc(100vh - 52px);
+  background:var(--bg);
+}
+.sidebar{
+  background:var(--panel);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  display:flex; flex-direction:column;
+  min-height:0;
+}
+.workspace-area{
+  position:relative; min-width:0;
+  background:var(--bg-elev);
+  overflow:hidden;
+}
+.workspace{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; min-width:0;
+  background:var(--bg-elev);
+  overflow:hidden;
+}
+.workspace:not([style*="display:none"]){z-index:1}
+
+/* Toolbox — editor + console; moved into the active workspace by JS */
+.toolbox{
+  display:flex; flex-direction:column;
+  flex:1 1 auto; min-height:0;
+  width:100%;
+}
+.toolbox-slot{
+  flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column;
+}
+
+/* ========== CONTESTS WORKSPACE ========== */
+.ws-contests{padding:0; overflow-y:auto}
+.contests-detail{
+  max-width:960px; margin:0 auto;
+  padding:32px 32px 64px;
+}
+.contests-hero{
+  display:flex; align-items:flex-start; gap:18px;
+  margin-bottom:28px;
+  padding:24px 26px;
+  background:linear-gradient(135deg, var(--panel-2), var(--bg-elev));
+  border:1px solid var(--border);
+  border-radius:14px;
+  position:relative; overflow:hidden;
+}
+.contests-hero::before{
+  content:""; position:absolute;
+  top:-40px; right:-40px; width:200px; height:200px;
+  background:radial-gradient(circle, rgba(46,160,67,0.15), transparent 70%);
+  pointer-events:none;
+}
+.hero-icon{
+  width:48px; height:48px; flex-shrink:0;
+  background:var(--green-soft);
+  border:1px solid rgba(46,160,67,0.3);
+  border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--green);
+}
+.hero-icon svg{width:24px; height:24px}
+.contests-hero h2{
+  font-size:22px; font-weight:700; color:var(--text);
+  margin-bottom:4px; letter-spacing:-0.3px;
+}
+.contests-hero p{
+  color:var(--text-2); font-size:13px; line-height:1.6;
+  max-width:600px;
+}
+.contests-grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));
+  gap:14px;
+}
+.contests-grid .empty-state{grid-column:1 / -1; padding:60px 16px; margin:0}
+
+/* ========== ADD PROBLEM WORKSPACE ========== */
+.ws-add{
+  overflow-y:auto;
+  background:var(--bg);
+}
+.add-page{
+  width:100%;
+  display:grid;
+  grid-template-columns:1fr 360px;
+  min-height:100%;
+}
+
+/* Hero header — spans full width above the form grid */
+.add-hero{
+  grid-column:1 / -1;
+  padding:32px 40px 24px;
+  background:linear-gradient(180deg, rgba(163,113,247,0.06), transparent);
+  border-bottom:1px solid var(--border);
+  display:flex; gap:20px; align-items:flex-start;
+}
+.add-hero-icon{
+  width:56px; height:56px; flex-shrink:0;
+  background:linear-gradient(135deg, var(--purple-soft), rgba(163,113,247,0.04));
+  border:1px solid rgba(163,113,247,0.3);
+  border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--purple);
+  box-shadow:0 4px 16px rgba(163,113,247,0.15);
+}
+.add-hero-icon svg{width:28px; height:28px}
+.add-hero-text{flex:1}
+.add-hero-text h1{
+  font-size:24px; font-weight:700; color:var(--text);
+  margin-bottom:6px; letter-spacing:-0.4px;
+  display:flex; align-items:center; gap:12px;
+}
+.add-hero-text h1 .badge-new{
+  font-size:9.5px; font-weight:700;
+  padding:2px 8px; border-radius:999px;
+  background:var(--purple-soft); color:var(--purple);
+  border:1px solid rgba(163,113,247,0.3);
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+.add-hero-text p{
+  color:var(--text-2); font-size:13px; line-height:1.6;
+  max-width:680px;
+}
+
+/* Form section */
+.add-form-section{
+  padding:32px 40px 60px;
+  display:flex; flex-direction:column; gap:28px;
+}
+.add-field-group{
+  background:var(--bg-elev);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+.add-field-group-head{
+  padding:14px 20px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px;
+  background:var(--panel);
+}
+.add-field-group-num{
+  width:22px; height:22px;
+  background:var(--purple-soft); color:var(--purple);
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; font-family:var(--font-mono);
+  border:1px solid rgba(163,113,247,0.2);
+}
+.add-field-group-title{
+  font-size:13px; font-weight:600; color:var(--text);
+}
+.add-field-group-sub{
+  font-size:11px; color:var(--text-3);
+  margin-left:auto;
+}
+.add-field-group-body{
+  padding:18px 20px;
+  display:flex; flex-direction:column; gap:14px;
+}
+.add-field{display:flex; flex-direction:column; gap:8px}
+.add-field-row{display:flex; gap:16px}
+.add-field-row .add-field{flex:1}
+.add-field label{
+  font-size:10.5px; color:var(--text-2);
+  text-transform:uppercase; letter-spacing:0.8px;
+  font-weight:700;
+  display:flex; align-items:center; gap:8px;
+}
+.add-field .hint-inline{
+  font-size:10px; color:var(--text-4); font-weight:500;
+  text-transform:none; letter-spacing:0;
+}
+.add-field input, .add-field textarea{
+  width:100%; background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border); border-radius:8px;
+  padding:11px 13px; font-size:13px; outline:none;
+  transition:border-color .15s, background .15s, box-shadow .15s;
+  resize:vertical; font-family:inherit;
+}
+.add-field input:hover, .add-field textarea:hover{border-color:var(--border-strong)}
+.add-field input:focus, .add-field textarea:focus{
+  border-color:var(--purple); background:var(--panel);
+  box-shadow:0 0 0 3px rgba(163,113,247,0.12);
+}
+.add-field .title-input{
+  font-size:16px; font-weight:600;
+  padding:14px 16px;
+  letter-spacing:-0.2px;
+}
+.add-field textarea{min-height:140px; line-height:1.6}
+.add-field .char-count{
+  font-size:10.5px; color:var(--text-4);
+  font-family:var(--font-mono);
+  align-self:flex-end;
+}
+
+/* Test cases inside field group */
+.cases-table{display:flex; flex-direction:column; gap:8px}
+.case-head{
+  display:grid; grid-template-columns:1fr 1fr 36px; gap:8px;
+  padding:0 4px;
+}
+.case-head span{
+  font-size:9.5px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:0.6px;
+  font-weight:700;
+}
+.case-row{
+  display:grid; grid-template-columns:1fr 1fr 36px; gap:8px;
+  align-items:stretch;
+}
+.case-row input{
+  padding:9px 11px; font-family:var(--font-mono);
+  font-size:12px; background:var(--panel-2);
+  border:1px solid var(--border); border-radius:7px;
+  color:var(--text); outline:none;
+  transition:border-color .15s;
+}
+.case-row input:hover{border-color:var(--border-strong)}
+.case-row input:focus{border-color:var(--purple)}
+.case-row .del{
+  background:transparent; border:1px solid var(--border);
+  color:var(--text-3); border-radius:7px;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; transition:all .12s;
+}
+.case-row .del:hover{background:var(--red-soft); color:var(--red); border-color:var(--red)}
+.add-test-btn{
+  align-self:flex-start;
+  background:transparent; border:1px dashed var(--border-strong);
+  color:var(--text-3);
+  padding:8px 14px; border-radius:7px;
+  font-size:12px; cursor:pointer; font-weight:600;
+  transition:all .15s;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.add-test-btn:hover{border-color:var(--purple); color:var(--purple); background:var(--purple-soft)}
+.add-test-btn svg{width:12px; height:12px}
+
+/* Footer */
+.add-form-foot{
+  padding:18px 20px;
+  background:var(--panel);
+  border-top:1px solid var(--border);
+  display:flex; align-items:center; gap:14px;
+}
+.add-form-foot .btn{padding:10px 20px; font-size:13px; font-weight:600}
+.add-form-foot .spacer{flex:1}
+.add-status{font-size:12px; color:var(--text-3); display:flex; align-items:center; gap:6px}
+.add-status.success{color:var(--green)}
+.add-status.error{color:var(--red)}
+.add-status svg{width:14px; height:14px}
+
+/* Live preview pane (right column) */
+.add-preview{
+  padding:32px 28px 60px;
+  background:var(--bg-elev);
+  border-left:1px solid var(--border);
+  position:sticky; top:0;
+  align-self:flex-start;
+  max-height:100vh;
+  overflow-y:auto;
+}
+.preview-label{
+  font-size:10px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:1.2px;
+  font-weight:700;
+  display:flex; align-items:center; gap:6px;
+  margin-bottom:14px;
+}
+.preview-label::before{
+  content:""; display:inline-block;
+  width:6px; height:6px; background:var(--purple);
+  border-radius:50%;
+  box-shadow:0 0 6px var(--purple);
+}
+.preview-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+  margin-bottom:16px;
+}
+.preview-card .preview-title{
+  font-size:15px; font-weight:600; color:var(--text);
+  margin-bottom:8px;
+  min-height:22px;
+}
+.preview-card .preview-title.empty{color:var(--text-4); font-weight:400; font-style:italic}
+.preview-card .preview-meta{
+  display:flex; gap:8px; align-items:center;
+  margin-bottom:10px; font-size:11px; color:var(--text-3);
+}
+.preview-card .preview-desc{
+  font-size:12px; color:var(--text-2); line-height:1.5;
+  margin-bottom:10px;
+  min-height:36px;
+}
+.preview-card .preview-desc.empty{color:var(--text-4); font-style:italic}
+.preview-card .preview-desc code{
+  background:var(--panel-2); padding:1px 5px; border-radius:3px;
+  font-family:var(--font-mono); font-size:11px;
+}
+.preview-card .preview-examples{
+  display:flex; flex-direction:column; gap:6px;
+}
+.preview-ex{
+  background:var(--editor-bg);
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:7px 9px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  color:var(--text);
+}
+.preview-ex .lbl{
+  color:var(--text-3); font-size:9px;
+  text-transform:uppercase; letter-spacing:0.5px;
+  font-weight:700; margin-bottom:3px;
+  display:block;
+}
+.preview-empty{
+  background:var(--panel);
+  border:1px dashed var(--border);
+  border-radius:10px;
+  padding:24px 16px;
+  text-align:center;
+  color:var(--text-3);
+  font-size:12px;
+  line-height:1.5;
+}
+.preview-empty svg{width:28px; height:28px; opacity:0.4; margin-bottom:8px; color:var(--text-3)}
+
+@media (max-width:1100px){
+  .add-page{grid-template-columns:1fr}
+  .add-preview{border-left:none; border-top:1px solid var(--border); position:static; max-height:none}
+}
+.add-status.success{color:var(--green)}
+.add-status.error{color:var(--red)}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
+.view{display:none; flex-direction:column; flex:1; min-height:0}
+.view.active{display:flex}
+
+.side-label{
+  font-size:10.5px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:1.2px;
+  font-weight:700;
+  padding:16px 16px 8px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.side-label .count{color:var(--text-4); font-weight:500; letter-spacing:0; text-transform:none}
+
+/* Filter input in problem list */
+.filter-row{padding:0 12px 8px}
+.filter-input{
+  width:100%;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:7px 10px 7px 30px;
+  color:var(--text);
+  font-size:12px;
+  outline:none;
+  transition:border-color .15s;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237D8590' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.3-4.3'/></svg>");
+  background-repeat:no-repeat;
+  background-position:10px center;
+  background-size:14px;
+}
+.filter-input::placeholder{color:var(--text-4)}
+.filter-input:focus{border-color:var(--accent)}
+
+/* Problem list */
+.problems-list{padding:0 8px 16px}
+.problem{
+  padding:9px 10px;
+  border-radius:6px;
+  cursor:pointer;
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:2px;
+  border:1px solid transparent;
+  transition:background .12s, border-color .12s;
+  position:relative;
+}
+.problem:hover{background:var(--panel-2)}
+.problem.active{
+  background:var(--accent-soft);
+  border-color:rgba(255,161,22,0.25);
+}
+.problem .num{
+  color:var(--text-3); font-size:11px; width:22px;
+  text-align:right; font-family:var(--font-mono);
+  flex-shrink:0; font-weight:500;
+}
+.problem.active .num{color:var(--accent); font-weight:700}
+.problem .name{
+  flex:1; font-size:12.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  color:var(--text-2);
+  font-weight:500;
+}
+.problem.active .name{color:var(--text); font-weight:600}
+
+/* Difficulty badge */
+.badge{
+  font-size:9.5px; font-weight:700;
+  padding:2px 8px; border-radius:999px;
+  flex-shrink:0; letter-spacing:0.4px;
+  text-transform:uppercase;
+  border:1px solid transparent;
+  line-height:1.4;
+}
+.badge.easy{color:var(--green); background:var(--green-soft); border-color:rgba(46,160,67,0.25)}
+.badge.medium{color:var(--yellow); background:var(--yellow-soft); border-color:rgba(210,153,34,0.25)}
+.badge.hard{color:var(--red); background:var(--red-soft); border-color:rgba(248,81,73,0.25)}
+.badge.custom{color:var(--purple); background:var(--purple-soft); border-color:rgba(163,113,247,0.25)}
+
+.problem-custom-dot{
+  width:6px; height:6px; border-radius:50%;
+  background:var(--purple);
+  display:inline-block;
+  flex-shrink:0;
+  box-shadow:0 0 4px var(--purple-soft);
+}
+
+/* ============================================
+   CONTAINER CARDS (Contests, Admin, etc)
+   ============================================ */
+.list-padded{padding:0 12px 16px}
+
+.contest-card{
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  margin-bottom:10px;
+  transition:border-color .15s, background .15s;
+}
+.contest-card:hover{border-color:var(--border-strong)}
+.contest-card .head{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:6px; gap:8px;
+}
+.contest-card .head b{font-size:13.5px; font-weight:600; color:var(--text)}
+.contest-card .desc2{
+  color:var(--text-2); font-size:12px; line-height:1.5;
+  margin-bottom:10px;
+  display:-webkit-box; -webkit-line-clamp:2;
+  -webkit-box-orient:vertical; overflow:hidden;
+}
+.contest-card .actions{display:flex; gap:6px; flex-wrap:wrap}
+
+.pill{
+  font-size:10px; font-weight:700;
+  padding:3px 10px; border-radius:999px;
+  text-transform:uppercase; letter-spacing:0.5px;
+  display:inline-flex; align-items:center; gap:5px;
+  flex-shrink:0;
+}
+.pill-draft{color:var(--yellow); background:var(--yellow-soft); border:1px solid rgba(210,153,34,0.25)}
+.pill-live{
+  color:var(--green); background:var(--green-soft);
+  border:1px solid rgba(46,160,67,0.25);
+}
+.pill-live::before{
+  content:""; width:6px; height:6px; border-radius:50%;
+  background:var(--green);
+  animation:pulse 1.4s ease-out infinite;
+}
+.pill-ended{color:var(--red); background:var(--red-soft); border:1px solid rgba(248,81,73,0.25)}
+
+.standings{
+  margin-top:10px;
+  max-height:0; overflow:hidden;
+  transition:max-height .25s ease;
+  border-top:1px solid transparent;
+}
+.standings.open{
+  max-height:500px;
+  border-top-color:var(--border);
+  padding-top:8px;
+}
+.st-row{
+  display:flex; gap:8px; padding:6px 4px;
+  align-items:center;
+  border-bottom:1px solid var(--border-soft);
+  font-size:12px;
+}
+.st-row:last-child{border-bottom:none}
+.st-row .rank{
+  color:var(--text-4); font-weight:700; width:24px;
+  font-family:var(--font-mono); font-size:11px;
+}
+.st-row .rank.gold{color:var(--accent)}
+.st-row .who{flex:1; color:var(--text); font-weight:500}
+.st-row .muted{color:var(--text-3); font-size:11px; font-family:var(--font-mono)}
+
+/* Admin panel */
+.admin-panel{
+  display:none;
+  margin:0 12px 16px;
+  padding:14px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:10px;
+}
+.admin-panel.show{display:block}
+.admin-panel .side-label{padding:0 0 10px; font-size:9.5px; letter-spacing:1.5px; color:var(--accent)}
+.admin-panel label{
+  display:block; color:var(--text-3); font-size:10px;
+  text-transform:uppercase; letter-spacing:0.5px;
+  margin:8px 0 4px; font-weight:600;
+}
+.admin-panel input{
+  width:100%; background:var(--panel); color:var(--text);
+  border:1px solid var(--border); border-radius:6px;
+  padding:7px 10px; font-size:12px; outline:none;
+  transition:border-color .15s;
+}
+.admin-panel input:focus{border-color:var(--accent)}
+.admin-actions{display:flex; gap:5px; margin-top:10px; flex-wrap:wrap}
+.admin-actions .btn{flex:1; min-width:0; justify-content:center}
+.admin-status{
+  color:var(--text-3); font-size:11px; margin-top:8px;
+  min-height:16px;
+}
+.admin-status.success{color:var(--green)}
+.admin-status.error{color:var(--red)}
+.plag-row{
+  font-size:11px; padding:6px 0;
+  color:var(--text-2);
+  border-top:1px solid var(--border-soft);
+  display:flex; align-items:center; gap:8px;
+}
+.plag-row .bar{
+  flex:1; height:3px; background:var(--panel);
+  border-radius:2px; overflow:hidden; position:relative;
+}
+.plag-row .bar-fill{
+  position:absolute; left:0; top:0; bottom:0;
+  border-radius:2px;
+}
+.plag-row .pct{font-family:var(--font-mono); color:var(--text-3); font-size:10.5px; min-width:32px; text-align:right}
+
+/* Empty state */
+.empty-state{
+  text-align:center; padding:36px 16px;
+  color:var(--text-3);
+  background:var(--panel-2);
+  border:1px dashed var(--border);
+  border-radius:10px;
+  margin:0 12px 12px;
+}
+.empty-state svg{width:36px; height:36px; opacity:0.4; margin-bottom:10px; color:var(--text-3)}
+.empty-state .t{font-size:13px; color:var(--text-2); font-weight:500; margin-bottom:4px}
+.empty-state .s{font-size:11.5px; color:var(--text-3); line-height:1.5}
+
+/* ============================================
+   PLAYGROUND SIDEBAR
+   ============================================ */
+.playground-card{
+  margin:0 12px 12px;
+  padding:12px 14px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+.playground-card .title{
+  font-size:10.5px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:1.2px;
+  font-weight:700; margin-bottom:10px;
+}
+.kbd-list{
+  display:flex; flex-direction:column; gap:8px;
+  font-size:11.5px; color:var(--text-2);
+}
+.kbd-list .row{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.kbd{
+  font-size:10px; color:var(--text-2);
+  border:1px solid var(--border);
+  border-radius:4px; padding:2px 6px;
+  background:var(--panel);
+  font-family:var(--font-mono);
+  font-weight:500;
+}
+
+.lang-row{display:flex; gap:6px; margin:0 12px 12px; flex-wrap:wrap}
+.lang-btn{
+  flex:1; min-width:0;
+  background:var(--panel-2); color:var(--text-2);
+  border:1px solid var(--border);
+  padding:10px 8px; border-radius:8px;
+  font-size:11.5px; cursor:pointer; font-weight:600;
+  transition:all .12s;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+}
+.lang-btn:hover{background:var(--panel-3); color:var(--text); border-color:var(--border-strong)}
+.lang-btn.active{
+  color:var(--text); border-color:var(--accent);
+  background:var(--accent-soft);
+}
+.lang-btn .lbl-icon{font-size:14px; font-weight:700; font-family:var(--font-mono); color:var(--text-3)}
+.lang-btn.active .lbl-icon{color:var(--accent)}
+
+/* ============================================
+   ADD PROBLEM FORM (sidebar)
+   ============================================ */
+.add-guide{
+  margin:0 12px 12px;
+  padding:10px 12px;
+  background:var(--blue-soft);
+  border:1px solid rgba(88,166,255,0.2);
+  border-radius:8px;
+  font-size:11.5px; color:var(--text-2);
+  line-height:1.5;
+}
+.add-guide b{color:var(--blue); font-weight:700; display:block; margin-bottom:4px; font-size:10px; text-transform:uppercase; letter-spacing:0.8px}
+
+.add-form{padding:0 12px 16px}
+.add-form label{
+  display:block; color:var(--text-3); font-size:10px;
+  text-transform:uppercase; letter-spacing:0.5px;
+  margin:10px 0 4px; font-weight:600;
+}
+.add-form input, .add-form textarea{
+  width:100%; background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border); border-radius:6px;
+  padding:8px 10px; font-size:12px; outline:none;
+  transition:border-color .15s;
+  resize:vertical;
+}
+.add-form input:focus, .add-form textarea:focus{border-color:var(--accent)}
+.add-form textarea{font-family:var(--font-ui); min-height:70px}
+.add-form .title-input{
+  font-size:14px; font-weight:600; padding:10px 12px;
+  background:var(--panel);
+}
+.case-row{
+  display:grid; grid-template-columns:1fr 1fr 32px; gap:5px;
+  margin-bottom:6px; align-items:stretch;
+}
+.case-row input{
+  padding:6px 8px; font-family:var(--font-mono); font-size:11px;
+  background:var(--panel-2);
+}
+.case-row .del{
+  background:transparent; border:1px solid var(--border);
+  color:var(--text-3); border-radius:5px;
+  cursor:pointer; height:auto;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px;
+  transition:all .12s;
+}
+.case-row .del:hover{background:var(--red-soft); color:var(--red); border-color:var(--red)}
+.case-head{
+  display:grid; grid-template-columns:1fr 1fr 32px; gap:5px;
+  margin-bottom:5px;
+}
+.case-head span{font-size:9.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; padding-left:2px}
+
+.add-test-btn{
+  width:100%; background:transparent;
+  border:1px dashed var(--border-strong);
+  color:var(--text-3);
+  padding:9px; border-radius:6px;
+  font-size:11.5px; cursor:pointer;
+  margin-top:8px; font-weight:600;
+  transition:all .15s;
+}
+.add-test-btn:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+
+.add-form-actions{
+  display:flex; gap:8px; margin-top:14px; align-items:center;
+}
+.add-form-actions .btn{flex:1; justify-content:center}
+.add-status{font-size:11.5px; color:var(--text-3); margin-left:4px}
+.add-status.success{color:var(--green)}
+.add-status.error{color:var(--red)}
+
+/* ============================================
+   WORKSPACE — STATEMENT
+   ============================================ */
+.statement{
+  flex:0 0 auto;
+  min-height:120px; max-height:42vh;
+  overflow-y:auto;
+  padding:18px 24px 20px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg-elev);
+  scroll-behavior:smooth;
+}
+.statement h1{
+  font-size:20px; font-weight:700; margin-bottom:8px;
+  color:var(--text); letter-spacing:-0.3px;
+}
+.statement .meta{
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:14px; font-size:12px; color:var(--text-3);
+  flex-wrap:wrap;
+}
+.statement .meta .sep{color:var(--border-strong)}
+.statement .meta .accepted{
+  color:var(--green); font-weight:600;
+  font-family:var(--font-mono);
+}
+.desc{
+  font-size:13.5px; line-height:1.7;
+  color:var(--text-2);
+}
+.desc p{margin-bottom:10px}
+.desc code{
+  background:var(--panel-2);
+  padding:1px 6px; border-radius:4px;
+  font-family:var(--font-mono); font-size:12px;
+  color:var(--text);
+  border:1px solid var(--border);
+}
+.desc strong{color:var(--text); font-weight:600}
+.desc .ex{
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  margin:12px 0;
+}
+.desc .ex .lbl{
+  color:var(--text-3); font-size:9.5px;
+  text-transform:uppercase; letter-spacing:1px;
+  font-weight:700; margin-bottom:8px;
+  display:flex; align-items:center; gap:6px;
+}
+.desc .ex .lbl::before{
+  content:""; display:inline-block;
+  width:3px; height:10px; background:var(--accent);
+  border-radius:2px;
+}
+.desc .ex pre{
+  font-family:var(--font-mono); font-size:12px;
+  color:var(--text);
+  background:var(--editor-bg);
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:8px 10px;
+  white-space:pre-wrap; word-break:break-word;
+  margin-bottom:4px;
+  line-height:1.5;
+}
+.desc .ex pre:last-child{margin-bottom:0}
+.desc .ex pre.errbox{background:rgba(248,81,73,0.08); border-color:rgba(248,81,73,0.2)}
+
+/* Playground breadcrumb replaces statement */
+.playground-breadcrumb{
+  flex:0 0 auto;
+  padding:14px 24px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg-elev);
+  display:flex; align-items:center; gap:12px;
+  font-size:13px; color:var(--text-2);
+}
+.playground-breadcrumb .icon{
+  width:32px; height:32px;
+  background:var(--accent-soft); border:1px solid rgba(255,161,22,0.25);
+  border-radius:7px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--accent);
+  flex-shrink:0;
+}
+.playground-breadcrumb .icon svg{width:16px; height:16px}
+.playground-breadcrumb b{color:var(--text); font-weight:700; font-size:13.5px}
+.playground-breadcrumb .sub{color:var(--text-3); font-size:11.5px; margin-top:1px}
+.playground-breadcrumb .text{flex:1}
+.playground-breadcrumb .hint{
+  margin-left:auto; font-size:11px; color:var(--text-3);
+  font-family:var(--font-mono);
+  padding:4px 10px; background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:5px;
+}
+
+/* ============================================
+   WORKSPACE — EDITOR BAR
+   ============================================ */
+.editor-bar{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel);
+  min-height:48px;
+}
+.editor-bar .select-wrap{position:relative; display:inline-flex}
+.editor-bar select{
+  background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border);
+  padding:6px 28px 6px 10px; border-radius:6px;
+  font-size:12.5px; font-weight:500;
+  cursor:pointer; outline:none;
+  appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237D8590' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat; background-position:right 8px center; background-size:14px;
+  transition:border-color .12s;
+}
+.editor-bar select:hover{border-color:var(--border-strong)}
+.editor-bar select:focus{border-color:var(--accent)}
+
+.editor-bar .ctx{
+  color:var(--text-3); font-size:11.5px;
+  display:flex; align-items:center; gap:6px;
+  font-weight:500;
+}
+.editor-bar .ctx .ed-dot{
+  width:6px; height:6px; border-radius:50%;
+  background:var(--yellow);
+  display:inline-block;
+}
+.editor-bar .spacer{flex:1}
+.editor-bar .btn{padding:7px 14px}
+.editor-bar .btn .icon-svg{width:11px; height:11px}
+
+.reset-btn{
+  background:transparent; border:none;
+  color:var(--text-3); cursor:pointer;
+  padding:6px 8px; border-radius:5px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.reset-btn:hover{background:var(--panel-2); color:var(--text)}
+.reset-btn svg{width:14px; height:14px}
+
+/* ============================================
+   EDITOR
+   ============================================ */
+.editor-wrap{
+  position:relative; flex:1 1 auto; min-height:0;
+  background:var(--editor-bg);
+  overflow:hidden;
+}
+#gutter{
+  position:absolute; top:0; left:0; bottom:0; width:48px;
+  background:var(--editor-gutter);
+  border-right:1px solid var(--border);
+  z-index:3;
+  padding:12px 10px 12px 0;
+  text-align:right;
+  color:var(--text-3);
+  font-family:var(--font-mono); font-size:13px; line-height:1.6;
+  user-select:none; overflow:hidden;
+  white-space:pre;
+}
+#gutter .ln{display:block; height:20.8px}
+#gutter .ln.current{color:var(--accent); font-weight:700; position:relative}
+#gutter .ln.current::before{
+  content:""; position:absolute;
+  left:-10px; top:0; bottom:0;
+  width:2px; background:var(--accent);
+}
+#hl{
+  position:absolute; inset:0;
+  background:var(--editor-bg);
+  padding:12px 16px 12px 60px;
+  font-family:var(--font-mono); font-size:13px; line-height:1.6;
+  white-space:pre; pointer-events:none; z-index:1;
+  color:var(--tk-text);
+  overflow:hidden;
+  margin:0;
+}
+#code{
+  position:absolute; top:0; left:48px; right:0; bottom:0;
+  background:transparent; color:transparent;
+  caret-color:var(--text);
+  border:none; outline:none; resize:none;
+  padding:12px 16px;
+  font-family:var(--font-mono); font-size:13px; line-height:1.6;
+  white-space:pre; overflow:auto; tab-size:4;
+  z-index:2;
+  font-variant-ligatures:none;
+  font-feature-settings:normal;
+}
+#code::placeholder{color:var(--text-4)}
+
+.tk-kw{color:var(--tk-kw)}
+.tk-str{color:var(--tk-str)}
+.tk-num{color:var(--tk-num)}
+.tk-com{color:var(--tk-com); font-style:italic}
+.tk-fn{color:var(--tk-fn)}
+.tk-def{color:#7aa2f7}
+
+/* ============================================
+   WORKSPACE — CONSOLE
+   ============================================ */
+.console{
+  flex:0 0 240px; min-height:160px;
+  border-top:1px solid var(--border);
+  background:var(--panel);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.console-tabs{
+  display:flex; padding:0 4px 0 8px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel);
+  align-items:center;
+}
+.console-tabs button{
+  background:none; border:none;
+  color:var(--text-3); padding:9px 14px;
+  font-size:12px; cursor:pointer;
+  border-bottom:2px solid transparent;
+  font-weight:600; transition:color .12s, border-color .12s;
+  position:relative; margin-bottom:-1px;
+}
+.console-tabs button:hover{color:var(--text-2)}
+.console-tabs button.active{
+  color:var(--text);
+  border-bottom-color:var(--accent);
+}
+.console-tabs .spacer{flex:1}
+.console-tabs .results-badge{
+  font-size:10.5px; color:var(--text-3);
+  font-family:var(--font-mono); font-weight:600;
+  padding:3px 8px; border-radius:4px;
+  margin-right:8px;
+  display:inline-flex; align-items:center; gap:5px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+}
+.console-tabs .results-badge.has-data{color:var(--green); border-color:rgba(46,160,67,0.25); background:var(--green-soft)}
+.console-tabs .results-badge.has-fail{color:var(--red); border-color:rgba(248,81,73,0.25); background:var(--red-soft)}
+
+.console-body{
+  flex:1; overflow-y:auto;
+  padding:10px 14px;
+  font-family:var(--font-mono); font-size:12px; line-height:1.6;
+  white-space:pre-wrap; color:var(--text);
+}
+.console-body .out{color:var(--text-2)}
+.console-body .err{color:var(--red)}
+.console-body .info{color:var(--text-3); font-style:normal}
+.console-body .verdict{
+  display:inline-block;
+  padding:3px 10px; border-radius:5px;
+  font-size:11px; font-weight:700; margin:2px 0;
+  text-transform:uppercase; letter-spacing:0.5px;
+  font-family:var(--font-mono);
+}
+.verdict.AC{background:var(--green-soft); color:var(--green); border:1px solid rgba(46,160,67,0.25)}
+.verdict.WA{background:var(--yellow-soft); color:var(--yellow); border:1px solid rgba(210,153,34,0.25)}
+.verdict.TLE,.verdict.MLE{background:rgba(255,140,66,0.14); color:#ff8c42; border:1px solid rgba(255,140,66,0.25)}
+.verdict.RE,.verdict.CE{background:var(--red-soft); color:var(--red); border:1px solid rgba(248,81,73,0.25)}
+
+/* Console input row — inside the console */
+.console-input-row{
+  display:flex; gap:8px;
+  padding:8px 12px;
+  border-top:1px solid var(--border);
+  background:var(--panel);
+  align-items:stretch;
+}
+.console-input-row textarea{
+  flex:1; background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border); border-radius:6px;
+  padding:7px 10px; font-family:var(--font-mono); font-size:12px;
+  resize:vertical; outline:none; min-height:32px; max-height:100px;
+  transition:border-color .12s;
+}
+.console-input-row textarea:focus{border-color:var(--accent)}
+.console-input-row textarea::placeholder{color:var(--text-4)}
+.console-input-row .btn{align-self:stretch; min-width:80px; justify-content:center}
+
+/* Test results cards */
+.test-card{
+  border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; margin-bottom:8px;
+  background:var(--panel-2);
+}
+.test-card .th{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:8px; gap:8px;
+}
+.test-card .th b{font-size:12.5px; font-weight:600; color:var(--text); font-family:var(--font-mono)}
+.test-card .io{font-size:11px; color:var(--text-3)}
+.test-card .io .field{margin-bottom:6px}
+.test-card .io .field-label{
+  font-size:9.5px; color:var(--text-3);
+  text-transform:uppercase; letter-spacing:0.5px;
+  font-weight:600; margin-bottom:3px;
+}
+.test-card .io pre{
+  font-family:var(--font-mono); font-size:11.5px;
+  background:var(--editor-bg);
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:6px 8px;
+  white-space:pre-wrap; word-break:break-word;
+  color:var(--text); line-height:1.5;
+}
+.test-card .io pre.errbox{
+  background:rgba(248,81,73,0.08);
+  border-color:rgba(248,81,73,0.25);
+  border-left:3px solid var(--red);
+  color:#ffb4b4;
+}
+
+/* ============================================
+   LEADERBOARD DRAWER
+   ============================================ */
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  z-index:90; display:none;
+  opacity:0; transition:opacity .2s ease;
+}
+.overlay.show{display:block; opacity:1}
+
+.drawer{
+  position:fixed; top:52px; right:0; bottom:0;
+  width:460px; max-width:92vw;
+  background:var(--panel);
+  border-left:1px solid var(--border);
+  transform:translateX(100%);
+  transition:transform .25s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index:95;
+  display:flex; flex-direction:column;
+  box-shadow:var(--shadow-drawer);
+}
+.drawer.open{transform:translateX(0)}
+.drawer-head{
+  display:flex; align-items:center; gap:10px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel);
+}
+.drawer-head h3{font-size:15px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:10px}
+.drawer-head h3 .icon{
+  width:30px; height:30px; border-radius:7px;
+  background:var(--accent-soft); color:var(--accent);
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.drawer-head h3 .icon svg{width:16px; height:16px}
+.drawer-head .close{
+  margin-left:auto; cursor:pointer;
+  color:var(--text-3); background:transparent;
+  border:1px solid transparent;
+  font-size:14px; width:30px; height:30px;
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .12s;
+}
+.drawer-head .close:hover{background:var(--panel-2); color:var(--text); border-color:var(--border)}
+.drawer-body{flex:1; overflow-y:auto}
+
+.lb-head{
+  display:flex; padding:10px 18px;
+  color:var(--text-3); font-size:10px;
+  text-transform:uppercase; letter-spacing:0.8px;
+  font-weight:700;
+  border-bottom:1px solid var(--border);
+  background:var(--panel-2);
+  position:sticky; top:0; z-index:1;
+}
+.lb-head span:nth-child(1){width:40px}
+.lb-head span:nth-child(2){flex:1}
+.lb-head span:nth-child(3){width:80px; text-align:center}
+.lb-head span:nth-child(4){width:80px; text-align:right}
+
+.lb-row{
+  display:flex; align-items:center;
+  padding:10px 18px;
+  font-size:12px;
+  border-bottom:1px solid var(--border-soft);
+  transition:background .12s;
+}
+.lb-row:hover{background:var(--panel-2)}
+.lb-row .rank{
+  width:40px;
+  color:var(--text-3); font-weight:700;
+  font-family:var(--font-mono); font-size:13px;
+  display:flex; align-items:center; gap:6px;
+}
+.lb-row.top3 .rank{color:var(--accent)}
+.lb-row .who{
+  flex:1; display:flex; flex-direction:column; min-width:0;
+  gap:2px;
+}
+.lb-row .who .p{font-weight:600; color:var(--text); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lb-row .who .m{color:var(--text-3); font-size:10.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono)}
+.lb-row .res{width:80px; text-align:center}
+.lb-row .res .verdict{font-size:9.5px; padding:2px 7px}
+.lb-row .met{
+  width:80px; text-align:right;
+  color:var(--text-2); font-family:var(--font-mono);
+  font-weight:600;
+}
+.lb-row.top3 .met{color:var(--text); font-weight:700}
+
+/* ============================================
+   MODAL
+   ============================================ */
+.modal{
+  position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-48%) scale(0.98);
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:24px 26px;
+  z-index:100;
+  width:400px; max-width:90vw;
+  box-shadow:var(--shadow-3);
+  display:none;
+  opacity:0; transition:opacity .18s ease, transform .18s ease;
+}
+.modal.show{
+  display:block;
+  transform:translate(-50%,-50%) scale(1);
+  opacity:1;
+}
+.modal h3{
+  font-size:17px; font-weight:700; margin-bottom:6px;
+  color:var(--text); display:flex; align-items:center; gap:10px;
+}
+.modal h3 .icon{
+  width:30px; height:30px; border-radius:7px;
+  background:var(--accent-soft); color:var(--accent);
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.modal h3 .icon svg{width:16px; height:16px}
+.modal p{color:var(--text-2); font-size:12.5px; margin-bottom:16px; line-height:1.5}
+.modal label{display:block; font-size:10.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; font-weight:600}
+.modal .field{margin-bottom:12px}
+.modal input{
+  width:100%; background:var(--panel-2); color:var(--text);
+  border:1px solid var(--border); border-radius:6px;
+  padding:9px 12px; font-size:13px; outline:none;
+  transition:border-color .12s;
+}
+.modal input:focus{border-color:var(--accent)}
+.modal input::placeholder{color:var(--text-4)}
+.modal .row{display:flex; gap:8px; justify-content:flex-end; margin-top:16px}
+.modal .row .btn{min-width:90px; justify-content:center}
+
+/* ============================================
+   TOAST
+   ============================================ */
+.toast{
+  position:fixed; top:68px; left:50%;
+  transform:translate(-50%, -8px);
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px 16px;
+  font-size:12.5px; z-index:200;
+  display:flex; align-items:center; gap:8px;
+  box-shadow:var(--shadow-2);
+  opacity:0; pointer-events:none;
+  transition:opacity .2s ease, transform .2s ease;
+  color:var(--text);
+  max-width:90vw;
+  border-left:3px solid var(--accent);
+}
+.toast.show{
+  opacity:1; pointer-events:auto;
+  transform:translate(-50%, 0);
+}
+.toast.error{border-left-color:var(--red)}
+.toast.success{border-left-color:var(--green)}
+.toast svg{width:14px; height:14px; flex-shrink:0}
+.toast.error svg{color:var(--red)}
+.toast.success svg{color:var(--green)}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width:900px){
+  .main{grid-template-columns:1fr; height:auto; overflow:auto}
+  body{overflow:auto}
+  .sidebar{max-height:50vh}
+  .topbar{height:auto; flex-wrap:wrap; padding:8px 12px; gap:6px}
+  .nav{order:3; width:100%; overflow-x:auto; padding-top:4px}
+  .statement{max-height:none}
+  .editor-wrap{min-height:300px}
+  .console{flex:0 0 auto; min-height:200px}
+  .drawer{width:100vw}
+  .brand{padding-right:8px; margin-right:0}
+}
+</style>
+</head>
+<body>
+
+<!-- SVG icon sprite -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+    <path d="M12 22V8.5"/>
+    <path d="M2 8.5 12 15.5 22 8.5"/>
+  </symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+    <path d="M4 22h16"/>
+    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+  </symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M8 5v14l11-7z"/>
+  </symbol>
+  <symbol id="i-submit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+    <path d="M21 3v5h-5"/>
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+    <path d="M3 21v-5h5"/>
+  </symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="16 18 22 12 16 6"/>
+    <polyline points="8 6 2 12 8 18"/>
+  </symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/>
+    <line x1="8" y1="12" x2="21" y2="12"/>
+    <line x1="8" y1="18" x2="21" y2="18"/>
+    <line x1="3" y1="6" x2="3.01" y2="6"/>
+    <line x1="3" y1="12" x2="3.01" y2="12"/>
+    <line x1="3" y1="18" x2="3.01" y2="18"/>
+  </symbol>
+  <symbol id="i-add" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="16"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+  </symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </symbol>
+  <symbol id="i-trophy-fill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+    <path d="M4 22h16"/>
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+  </symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+    <path d="M6 8H5a4 4 0 0 0 0 8h1"/>
+    <path d="M6 8h12v8a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>
+    <line x1="12" y1="2" x2="12" y2="6"/>
+  </symbol>
+  <symbol id="i-empty" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14"/>
+    <path d="M12 5v14"/>
+  </symbol>
+</svg>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-icon"><svg><use href="#i-logo"/></svg></span>
+    <span class="brand-name">Algo<em>Battle</em></span>
+  </div>
+  <div class="nav">
+    <button class="nav-btn active" data-view="problems">
+      <svg style="width:13px;height:13px;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-list"/></svg>Problems
+    </button>
+    <button class="nav-btn" data-view="contests">Contests</button>
+    <button class="nav-btn" data-view="compiler">
+      <svg style="width:13px;height:13px;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-code"/></svg>Playground
+    </button>
+    <button class="nav-btn" data-view="add">
+      <svg style="width:13px;height:13px;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-add"/></svg>Add Problem
+    </button>
+  </div>
+  <div class="right">
+    <div class="status" id="statusPill"><span class="dot" id="healthDot"></span><span id="healthText">checking…</span></div>
+    <button class="btn auth-btn" id="authBtn">
+      <span class="auth-avatar" id="authAvatar" style="display:none"></span>
+      <span id="authBtnText">Sign in</span><span class="auth-admin-dot" id="authAdminDot" style="display:none"></span>
+    </button>
+    <button class="btn icon" id="showLb" title="Leaderboard">
+      <svg class="icon-svg" style="width:14px;height:14px"><use href="#i-trophy-fill"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <aside class="sidebar">
+
+    <div class="view active" id="view-problems">
+      <div class="side-label">Problem Set <span class="count" id="problemCount"></span></div>
+      <div class="filter-row">
+        <input type="text" class="filter-input" id="problemFilter" placeholder="Filter problems…">
+      </div>
+      <div class="problems-list" id="problemsList"></div>
+    </div>
+
+    <div class="view" id="view-contests">
+      <div class="side-label">Contests</div>
+      <div class="list-padded" id="contestsList"></div>
+      <div class="admin-panel" id="adminPanel">
+        <div class="side-label" style="padding:0 0 4px">⚙ Admin</div>
+        <label>Name</label><input id="ctName" placeholder="GDG Speed Coding">
+        <label>Description</label><input id="ctDesc" placeholder="2 hours · 5 problems">
+        <label>Problem slugs (comma)</label><input id="ctSlugs" value="two-sum,fibonacci,maximum-subarray">
+        <div class="admin-actions">
+          <button class="btn primary small" id="ctCreate">Create</button>
+          <button class="btn small" id="ctStart">Start</button>
+          <button class="btn small" id="ctEnd">End</button>
+          <button class="btn small" id="ctPlag">Plag</button>
+        </div>
+        <div class="admin-status" id="ctStatus"></div>
+        <div id="plagResults"></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-compiler">
+      <div class="side-label">Playground</div>
+      <div class="lang-row" id="compilerLangNav"></div>
+      <div class="playground-card">
+        <div class="title">Keyboard shortcuts</div>
+        <div class="kbd-list">
+          <div class="row"><span>Run</span><span class="kbd">⌘/Ctrl + ↵</span></div>
+          <div class="row"><span>Submit</span><span class="kbd">⌘/Ctrl + S</span></div>
+          <div class="row"><span>Indent</span><span class="kbd">Tab</span></div>
+          <div class="row"><span>Comment</span><span class="kbd">⌘/Ctrl + /</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="view-add">
+      <div class="side-label">Add a Problem</div>
+      <div class="add-guide">
+        <b>How it works</b>
+        Fill out the form on the right. Saved problems appear in the Problem list instantly for everyone to solve. Markdown is supported in the description.
+      </div>
+      <div class="add-guide" style="background:var(--yellow-soft);border-color:rgba(210,153,34,0.2);color:var(--text-2)">
+        <b style="color:var(--yellow)">Tip</b>
+        Make test cases that cover edge cases — empty input, single element, large values, negative numbers. Hidden tests are auto-generated from your test cases.
+      </div>
+    </div>
+
+  </aside>
+
+  <main class="workspace-area" id="workspaceArea">
+
+    <!-- ========== WORKSPACE: PROBLEMS ========== -->
+    <section class="workspace" id="ws-problems" data-view="problems">
+      <div class="statement" id="statement"></div>
+      <div class="toolbox-slot" data-slot="editor"></div>
+    </section>
+
+    <!-- ========== WORKSPACE: PLAYGROUND ========== -->
+    <section class="workspace" id="ws-playground" data-view="compiler" style="display:none">
+      <div class="playground-breadcrumb">
+        <div class="icon"><svg><use href="#i-code"/></svg></div>
+        <div class="text">
+          <b>Playground</b>
+          <div class="sub">Free-form code runner · no scoring, no leaderboard</div>
+        </div>
+        <div class="hint">⌘/Ctrl + ↵ to run</div>
+      </div>
+      <div class="toolbox-slot" data-slot="editor"></div>
+    </section>
+
+    <!-- ========== WORKSPACE: CONTESTS ========== -->
+    <section class="workspace ws-contests" id="ws-contests" data-view="contests" style="display:none">
+      <div class="contests-detail" id="contestsDetail">
+        <div class="contests-hero">
+          <div class="hero-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          </div>
+          <div>
+            <h2>Contests</h2>
+            <p>Compete live against other participants on a curated set of problems. Standings update in real time.</p>
+          </div>
+        </div>
+        <div class="contests-grid" id="contestsGrid"></div>
+      </div>
+    </section>
+
+    <!-- ========== WORKSPACE: ADD PROBLEM ========== -->
+    <section class="workspace ws-add" id="ws-add" data-view="add" style="display:none">
+      <div class="add-page">
+
+        <div class="add-hero">
+          <div class="add-hero-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+          <div class="add-hero-text">
+            <h1>Add a Problem <span class="badge-new">CUSTOM</span></h1>
+            <p>Create a custom problem for the community. Saved problems appear in the Problem Set instantly and anyone can solve them. The hidden test suite is auto-generated from your examples.</p>
+          </div>
+        </div>
+
+        <div class="add-form-section">
+
+          <div class="add-field-group">
+            <div class="add-field-group-head">
+              <span class="add-field-group-num">1</span>
+              <span class="add-field-group-title">Title & Description</span>
+              <span class="add-field-group-sub">What the participant sees</span>
+            </div>
+            <div class="add-field-group-body">
+              <div class="add-field">
+                <label>Title <span class="hint-inline">Up to 80 characters</span></label>
+                <input id="addTitle" class="title-input" placeholder="e.g. Sum of Two Numbers" maxlength="80">
+                <span class="char-count" id="addTitleCount">0 / 80</span>
+              </div>
+              <div class="add-field">
+                <label>Description <span class="hint-inline">Markdown supported — **bold**, `inline code`</span></label>
+                <textarea id="addDesc" placeholder="Explain the problem in plain English. Be specific about input format, output format, and edge cases. Example:&#10;&#10;Given an array of integers and a target, return the **indices** of the two numbers that add up to the target.&#10;&#10;Each input has exactly one valid answer." rows="10"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="add-field-group">
+            <div class="add-field-group-head">
+              <span class="add-field-group-num">2</span>
+              <span class="add-field-group-title">Test Cases</span>
+              <span class="add-field-group-sub">At least 1 required · powers hidden suite</span>
+            </div>
+            <div class="add-field-group-body">
+              <div class="cases-table">
+                <div class="case-head"><span>Input (stdin)</span><span>Expected output (stdout)</span><span></span></div>
+                <div id="addCases"></div>
+              </div>
+              <button class="add-test-btn" id="addCaseRow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add test case
+              </button>
+            </div>
+            <div class="add-form-foot">
+              <button class="btn primary" id="addSubmit">
+                <svg style="width:14px;height:14px;display:inline-block;vertical-align:-2px;margin-right:4px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Save problem
+              </button>
+              <span class="add-status" id="addStatus"></span>
+              <span class="spacer"></span>
+              <span style="font-size:11px;color:var(--text-4)">⌘/Ctrl + Enter to submit</span>
+            </div>
+          </div>
+
+        </div>
+
+        <aside class="add-preview">
+          <div class="preview-label">Live preview</div>
+          <div class="preview-card" id="previewCard">
+            <div class="preview-title" id="previewTitle">Untitled problem</div>
+            <div class="preview-meta">
+              <span class="badge custom">CUSTOM</span>
+              <span id="previewTestCount">0 test cases</span>
+            </div>
+            <div class="preview-desc empty" id="previewDesc">Your description will appear here as you type.</div>
+            <div class="preview-examples" id="previewExamples"></div>
+          </div>
+          <div class="preview-empty" id="previewHint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            <div>This is what participants will see in the Problem Set</div>
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Shared editor toolbox (mounted into ws-problems or ws-playground by JS) -->
+<div class="toolbox" id="toolbox" style="display:none">
+  <div class="editor-bar">
+    <div class="select-wrap">
+      <select id="lang">
+        <option value="python">Python</option>
+        <option value="cpp">C++</option>
+        <option value="java">Java</option>
+      </select>
+    </div>
+    <span class="ctx" id="editorContext"></span>
+    <span class="ed-dot" id="editorDirtyDot" style="display:none"></span>
+    <div class="spacer"></div>
+    <button class="reset-btn" id="btnReset" title="Reset to boilerplate">
+      <svg><use href="#i-reset"/></svg>
+    </button>
+    <button class="btn" id="btnRun">
+      <svg class="icon-svg"><use href="#i-play"/></svg>Run
+    </button>
+    <button class="btn success" id="btnSubmit">
+      <svg class="icon-svg"><use href="#i-submit"/></svg>Submit
+    </button>
+  </div>
+  <div class="editor-wrap">
+    <div id="gutter"></div>
+    <pre id="hl"></pre>
+    <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+  </div>
+  <div class="console">
+    <div class="console-tabs">
+      <button class="active" data-tab="output">Output</button>
+      <button data-tab="results">Test results</button>
+      <div class="spacer"></div>
+      <span class="results-badge" id="resultsBadge" style="display:none"></span>
+    </div>
+    <div class="console-body" id="consoleOut"></div>
+    <div class="console-body" id="consoleTests" style="display:none"></div>
+    <div class="console-input-row">
+      <textarea id="customInput" placeholder="Custom input — run with Ctrl+Enter…" rows="1"></textarea>
+      <button class="btn" id="btnRunCustom">Run</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3><span class="icon"><svg><use href="#i-trophy-fill"/></svg></span>Leaderboard</h3>
+    <button class="close" id="closeLb" title="Close"><svg style="width:14px;height:14px"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <div class="lb-head"><span>#</span><span>Participant</span><span>Verdict</span><span>Score</span></div>
+    <div id="lbBody"></div>
+  </div>
+</aside>
+
+<!-- AUTH MODAL -->
+<div class="modal" id="authModal">
+  <h3><span class="icon"><svg><use href="#i-user"/></svg></span>Sign in to AlgoBattle</h3>
+  <p>Submissions are ranked under this identity. Use an admin key to unlock contest creation and plagiarism checks.</p>
+  <div class="field">
+    <label>Display name</label>
+    <input id="nameInput" placeholder="Your name" maxlength="30">
+  </div>
+  <div class="field">
+    <label>Admin key (optional)</label>
+    <input id="adminKeyInput" placeholder="Leave blank to participate anonymously" maxlength="40" type="password">
+  </div>
+  <div class="row">
+    <button class="btn ghost" id="nameSkip">Anonymous</button>
+    <button class="btn primary" id="nameOk">Sign in</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const PROBLEMS = [{"slug": "two-sum", "title": "1. Two Sum", "difficulty": "Easy", "description": "Given an array of integers `nums` and a target `target`, return the indices of the two numbers that add up to the target.\n\n**Input format:** first line = space-separated integers, second line = target.\n\n**Output format:** two indices separated by a space.", "examples": [["2 7 11 15\n9", "0 1"], ["3 2 4\n6", "1 2"], ["3 3\n6", "0 1"]], "hidden_count": 6}, {"slug": "fibonacci", "title": "2. Fibonacci Number", "difficulty": "Easy", "description": "Given `n`, return the n-th Fibonacci number (F(0)=0, F(1)=1).\n\n**Input format:** single integer `n`.\n\n**Output format:** F(n).", "examples": [["10", "55"], ["20", "6765"], ["30", "832040"]], "hidden_count": 6}, {"slug": "maximum-subarray", "title": "3. Maximum Subarray", "difficulty": "Medium", "description": "Given an array of integers, find the contiguous subarray with the largest sum (Kadane's algorithm).\n\n**Input format:** space-separated integers.\n\n**Output format:** the maximum subarray sum.", "examples": [["-2 1 -3 4 -1 2 1 -5 4", "6"], ["1", "1"], ["5 4 -1 7 8", "23"]], "hidden_count": 6}, {"slug": "valid-parentheses", "title": "4. Valid Parentheses", "difficulty": "Easy", "description": "Given a string containing just the characters `()[]{}`, determine if the input string is valid.\n\n**Input format:** the bracket string.\n\n**Output format:** `true` or `false`.", "examples": [["()[]{}", "true"], ["([)]", "false"], ["{[]}", "true"]], "hidden_count": 8}, {"slug": "climbing-stairs", "title": "5. Climbing Stairs", "difficulty": "Easy", "description": "You are climbing a staircase with `n` steps. Each time you can climb 1 or 2 steps. In how many distinct ways can you climb to the top?\n\n**Input format:** single integer `n`.\n\n**Output format:** number of ways.", "examples": [["2", "2"], ["3", "3"], ["5", "8"]], "hidden_count": 6}, {"slug": "palindrome-number", "title": "6. Palindrome Number", "difficulty": "Easy", "description": "Given an integer `x`, return `true` if it is a palindrome (reads the same forwards and backwards).\n\n**Input format:** single integer.\n\n**Output format:** `true` or `false`.", "examples": [["121", "true"], ["-121", "false"], ["1221", "true"]], "hidden_count": 6}, {"slug": "binary-search", "title": "7. Binary Search", "difficulty": "Easy", "description": "Given a sorted array of integers and a target, return the index of the target, or `-1` if not present.\n\n**Input format:** first line = space-separated sorted integers, second line = target.\n\n**Output format:** the index, or `-1`.", "examples": [["-1 0 3 5 9 12\n9", "4"], ["-1 0 3 5 9 12\n2", "-1"], ["5\n5", "0"]], "hidden_count": 6}, {"slug": "contains-duplicate", "title": "8. Contains Duplicate", "difficulty": "Easy", "description": "Given an array of integers, return `true` if any value appears at least twice, else `false`.\n\n**Input format:** space-separated integers.\n\n**Output format:** `true` or `false`.", "examples": [["1 2 3 1", "true"], ["1 2 3 4", "false"], ["1 1 1 3 3 4 3 2 4 2", "true"]], "hidden_count": 6}, {"slug": "best-time-buy-sell", "title": "9. Best Time to Buy and Sell Stock", "difficulty": "Medium", "description": "Given an array `prices` where `prices[i]` is the price on day i, return the maximum profit you can achieve by buying one day and selling on a later day. Return `0` if no profit is possible.\n\n**Input format:** space-separated integers (prices).\n\n**Output format:** the max profit.", "examples": [["7 1 5 3 6 4", "5"], ["7 6 4 3 1", "0"], ["2 4 1", "2"]], "hidden_count": 6}, {"slug": "power-of-two", "title": "10. Power of Two", "difficulty": "Easy", "description": "Given an integer `n`, return `true` if it is a power of two, else `false`.\n\n**Input format:** single integer.\n\n**Output format:** `true` or `false`.", "examples": [["1", "true"], ["16", "true"], ["3", "false"]], "hidden_count": 6}];
+const BOILERPLATES = {"two-sum": "nums = list(map(int, input().split()))\nt = int(input())\nd = {}\nfor i, n in enumerate(nums):\n    if t - n in d:\n        print(d[t - n], i)\n        break\n    d[n] = i\n", "fibonacci": "n = int(input())\na, b = 0, 1\nfor _ in range(n):\n    a, b = b, a + b\nprint(a)\n", "maximum-subarray": "nums = list(map(int, input().split()))\nbest = cur = nums[0]\nfor x in nums[1:]:\n    cur = max(x, cur + x)\n    best = max(best, cur)\nprint(best)\n", "valid-parentheses": "import sys\ns = sys.stdin.read().strip()\nst = []\npairs = {')': '(', ']': '[', '}': '{'}\nfor c in s:\n    if c in pairs:\n        if not st or st.pop() != pairs[c]:\n            print('false')\n            break\n    else:\n        st.append(c)\nelse:\n    print('true' if not st else 'false')\n", "climbing-stairs": "n = int(input())\na, b = 1, 1\nfor _ in range(n - 1):\n    a, b = b, a + b\nprint(b)\n", "palindrome-number": "x = int(input())\ns = str(abs(x))\nprint('true' if x >= 0 and s == s[::-1] else 'false')\n", "binary-search": "nums = list(map(int, input().split()))\nt = int(input())\nlo, hi = 0, len(nums) - 1\nans = -1\nwhile lo <= hi:\n    mid = (lo + hi) // 2\n    if nums[mid] == t:\n        ans = mid\n        break\n    elif nums[mid] < t:\n        lo = mid + 1\n    else:\n        hi = mid - 1\nprint(ans)\n", "contains-duplicate": "nums = list(map(int, input().split()))\nprint('true' if len(set(nums)) < len(nums) else 'false')\n", "best-time-buy-sell": "p = list(map(int, input().split()))\nmn = p[0]\nbest = 0\nfor x in p[1:]:\n    best = max(best, x - mn)\n    mn = min(mn, x)\nprint(best)\n", "power-of-two": "n = int(input())\nprint('true' if n > 0 and (n & (n - 1)) == 0 else 'false')\n"};
+
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg, ms=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'),ms); }
+function lineOut(el, kind, text){ const d=document.createElement('div'); d.className=kind; d.textContent=text; el.appendChild(d); el.scrollTop=el.scrollHeight; return d; }
+
+let current = PROBLEMS[0].slug;
+let lastProblemSlug = current;
+let activeContest = null;
+let authToken = localStorage.getItem('ab_token') || '';
+let authName = localStorage.getItem('ab_name') || '';
+let isAdmin = false;
+let CUSTOM_PROBLEMS = [];
+
+const codeEl = $('code'), hlEl = $('hl'), gutterEl = $('gutter');
+const PY_KW = /\b(def|class|return|if|elif|else|for|while|import|from|as|in|not|and|or|True|False|None|print|int|float|str|list|dict|range|len|break|continue|try|except|finally|lambda|with|global|pass|is|del|input|map|split|join|append|sum|min|max|sorted|enumerate|zip)\b/;
+
+function highlight(src){
+  let out='', i=0;
+  while(i<src.length){
+    const rest=src.slice(i);
+    if(rest.startsWith('#')){ let e=rest.indexOf('\n'); if(e===-1)e=rest.length; out+='<span class="tk-com">'+esc(rest.slice(0,e))+'</span>'; i+=e; }
+    else if(rest.startsWith('"""')||rest.startsWith("'''")){ const q=rest.slice(0,3); let e=rest.indexOf(q,3); if(e===-1)e=rest.length; out+='<span class="tk-str">'+esc(rest.slice(0,e))+'</span>'; i+=e; }
+    else if(rest[0]==='"'||rest[0]==="'"){ const q=rest[0]; let e=1; while(e<rest.length&&rest[e]!==q){ if(rest[e]==='\\')e++; e++; } e=Math.min(e+1,rest.length); out+='<span class="tk-str">'+esc(rest.slice(0,e))+'</span>'; i+=e; }
+    else if(/[0-9]/.test(rest[0])){ const m=rest.match(/^\d*\.?\d+/); out+='<span class="tk-num">'+m[0]+'</span>'; i+=m[0].length; }
+    else if(/[A-Za-z_]/.test(rest[0])){ const m=rest.match(/^[A-Za-z_]\w*/); const w=m[0]; if(PY_KW.test(w)) out+='<span class="tk-kw">'+w+'</span>'; else if(rest[m[0].length]==='(') out+='<span class="tk-fn">'+w+'</span>'; else out+=esc(w); i+=w.length; }
+    else { out+=esc(rest[0]); i+=1; }
+  }
+  return out;
+}
+function syncEditor(){
+  const src=codeEl.value;
+  hlEl.innerHTML=highlight(src)+'\n';
+  gutterEl.innerHTML=Array.from({length:src.split('\n').length},(_,i)=>i+1).join('<br>');
+  hlEl.scrollTop=codeEl.scrollTop; hlEl.scrollLeft=codeEl.scrollLeft;
+}
+function indentOf(line){ return (line.match(/^\s*/)||[''])[0]; }
+function autoIndentFor(line){
+  const indent=indentOf(line);
+  if(/:$/.test(line.trim())) return indent+'    ';
+  if(/^\s*(return|break|continue|pass|raise)\b/.test(line.trim())) return indent.slice(0,Math.max(0,indent.length-4));
+  return indent;
+}
+codeEl.addEventListener('scroll', syncEditor);
+codeEl.addEventListener('input', syncEditor);
+codeEl.addEventListener('keydown', e => {
+  const s=codeEl.selectionStart, en=codeEl.selectionEnd, v=codeEl.value;
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); runCustom(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){ e.preventDefault(); submit(); return; }
+  if(e.key==='Tab'){
+    e.preventDefault();
+    if(!e.shiftKey){ codeEl.value=v.slice(0,s)+'    '+v.slice(en); codeEl.selectionStart=codeEl.selectionEnd=s+4; }
+    else { const lineStart=v.lastIndexOf('\n',s-1)+1; const lead=(v.slice(lineStart,s).match(/^ */)||[''])[0]; const remove=Math.min(4,lead.length); codeEl.value=v.slice(0,lineStart)+v.slice(lineStart+remove); codeEl.selectionStart=codeEl.selectionEnd=s-remove; }
+    syncEditor(); return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='/'){
+    e.preventDefault();
+    const lineStart=v.lastIndexOf('\n',s-1)+1; const lineEnd=v.indexOf('\n',s); const le=lineEnd===-1?v.length:lineEnd;
+    const line=v.slice(lineStart,le);
+    if(line.trim().startsWith('#')){ const idx=line.indexOf('#'); codeEl.value=v.slice(0,lineStart)+line.slice(0,idx)+line.slice(idx+1).replace(/^ /,'')+v.slice(le); }
+    else { codeEl.value=v.slice(0,lineStart)+'# '+line+v.slice(le); }
+    codeEl.selectionStart=codeEl.selectionEnd=lineStart; syncEditor(); return;
+  }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const lineStart=v.lastIndexOf('\n',s-1)+1; const line=v.slice(lineStart,s);
+    const indent=autoIndentFor(line); const nl='\n'+indent;
+    codeEl.value=v.slice(0,s)+nl+v.slice(en); codeEl.selectionStart=codeEl.selectionEnd=s+nl.length;
+    syncEditor(); return;
+  }
+  const pairs={')':'(',']':'[','}':'{','"':'"',"'":"'",'`':'`'};
+  if(e.key in pairs){
+    e.preventDefault(); const open=pairs[e.key];
+    if(s!==en){ codeEl.value=v.slice(0,s)+open+e.key+v.slice(en); codeEl.selectionStart=s+1; codeEl.selectionEnd=en+1; }
+    else if(v[s]===e.key){ codeEl.selectionStart=codeEl.selectionEnd=s+1; }
+    else { codeEl.value=v.slice(0,s)+open+e.key+v.slice(s); codeEl.selectionStart=codeEl.selectionEnd=s+1; }
+    syncEditor(); return;
+  }
+  if('([{'.includes(e.key)){
+    e.preventDefault(); const c={'(':')','[':']','{':'}'}[e.key];
+    codeEl.value=v.slice(0,s)+e.key+c+v.slice(en); codeEl.selectionStart=codeEl.selectionEnd=s+1;
+    syncEditor(); return;
+  }
+  if(e.key==='Backspace' && s===en && s>0){
+    const match={')':'(',']':'[','}':'{','(':')','[':']','{':'}'};
+    if(match[v[s-1]] && v[s]===match[v[s-1]]){ e.preventDefault(); codeEl.value=v.slice(0,s-1)+v.slice(s+1); codeEl.selectionStart=codeEl.selectionEnd=s-1; syncEditor(); return; }
+  }
+});
+
+const CPP_BOILERPLATES = {
+  "two-sum": `#include <iostream>\n#include <sstream>\n#include <unordered_map>\n#include <vector>\nusing namespace std;\nint main(){\n  string line; getline(cin, line);\n  stringstream ss(line); vector<int> nums; int x;\n  while(ss >> x) nums.push_back(x);\n  int t; cin >> t;\n  unordered_map<int,int> d;\n  for(size_t i=0;i<nums.size();i++){\n    if(d.count(t - nums[i])) { cout << d[t-nums[i]] << " " << i; return 0; }\n    d[nums[i]] = i;\n  }\n  return 0;\n}`,
+  "fibonacci": `#include <iostream>\nusing namespace std;\nint main(){\n  long long n; cin >> n;\n  long long a=0, b=1;\n  for(long long i=0;i<n;i++){ long long c=a+b; a=b; b=c; }\n  cout << a << endl;\n  return 0;\n}`,
+  "maximum-subarray": `#include <iostream>\n#include <sstream>\n#include <vector>\n#include <algorithm>\nusing namespace std;\nint main(){\n  string line; getline(cin, line);\n  stringstream ss(line); vector<int> nums; int x;\n  while(ss >> x) nums.push_back(x);\n  int best = nums[0], cur = nums[0];\n  for(size_t i=1;i<nums.size();i++){ cur = max(nums[i], cur + nums[i]); best = max(best, cur); }\n  cout << best << endl;\n  return 0;\n}`,
+  "valid-parentheses": `#include <iostream>\n#include <stack>\nusing namespace std;\nint main(){\n  string s; cin >> s;\n  stack<char> st;\n  for(char c : s){\n    if(c=='('||c=='['||c=='{') st.push(c);\n    else {\n      if(st.empty()) { cout << "false"; return 0; }\n      char t = st.top(); st.pop();\n      if((c==')'&&t!='(')||(c==']'&&t!='[')||(c=='}'&&t!='{')) { cout << "false"; return 0; }\n    }\n  }\n  cout << (st.empty() ? "true" : "false");\n  return 0;\n}`,
+  "climbing-stairs": `#include <iostream>\nusing namespace std;\nint main(){\n  long long n; cin >> n;\n  long long a=1, b=1;\n  for(long long i=1;i<n;i++){ long long c=a+b; a=b; b=c; }\n  cout << b << endl;\n  return 0;\n}`,
+  "palindrome-number": `#include <iostream>\n#include <string>\nusing namespace std;\nint main(){\n  long long x; cin >> x;\n  string s = to_string(x);\n  if(x < 0) { cout << "false"; return 0; }\n  string r(s.rbegin(), s.rend());\n  cout << (s == r ? "true" : "false");\n  return 0;\n}`,
+  "binary-search": `#include <iostream>\n#include <sstream>\n#include <vector>\nusing namespace std;\nint main(){\n  string line; getline(cin, line);\n  stringstream ss(line); vector<int> a; int x;\n  while(ss >> x) a.push_back(x);\n  int t; cin >> t;\n  int lo=0, hi=(int)a.size()-1, ans=-1;\n  while(lo<=hi){ int mid=(lo+hi)/2; if(a[mid]==t){ ans=mid; break; } else if(a[mid]<t) lo=mid+1; else hi=mid-1; }\n  cout << ans << endl;\n  return 0;\n}`,
+  "contains-duplicate": `#include <iostream>\n#include <sstream>\n#include <set>\nusing namespace std;\nint main(){\n  string line; getline(cin, line);\n  stringstream ss(line); set<int> seen; int x; bool dup=false;\n  while(ss >> x){ if(seen.count(x)) dup=true; seen.insert(x); }\n  cout << (dup ? "true" : "false");\n  return 0;\n}`,
+  "best-time-buy-sell": `#include <iostream>\n#include <sstream>\n#include <vector>\n#include <algorithm>\nusing namespace std;\nint main(){\n  string line; getline(cin, line);\n  stringstream ss(line); vector<int> p; int x;\n  while(ss >> x) p.push_back(x);\n  int mn=p[0], best=0;\n  for(size_t i=1;i<p.size();i++){ best=max(best, p[i]-mn); mn=min(mn,p[i]); }\n  cout << best << endl;\n  return 0;\n}`,
+  "power-of-two": `#include <iostream>\nusing namespace std;\nint main(){\n  long long n; cin >> n;\n  cout << (n>0 && (n & (n-1))==0 ? "true" : "false");\n  return 0;\n}`,
+};
+const JAVA_BOILERPLATES = {
+  "two-sum": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String line = sc.nextLine();\n    String[] parts = line.split(" ");\n    int[] nums = new int[parts.length];\n    for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\n    int t = sc.nextInt();\n    Map<Integer,Integer> d = new HashMap<>();\n    for (int i = 0; i < nums.length; i++) {\n      if (d.containsKey(t - nums[i])) { System.out.println(d.get(t - nums[i]) + " " + i); return; }\n      d.put(nums[i], i);\n    }\n  }\n}`,
+  "fibonacci": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    long n = sc.nextLong();\n    long a = 0, b = 1;\n    for (long i = 0; i < n; i++) { long c = a + b; a = b; b = c; }\n    System.out.println(a);\n  }\n}`,
+  "maximum-subarray": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String line = sc.nextLine();\n    String[] parts = line.split(" ");\n    int[] nums = new int[parts.length];\n    for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);\n    int best = nums[0], cur = nums[0];\n    for (int i = 1; i < nums.length; i++) { cur = Math.max(nums[i], cur + nums[i]); best = Math.max(best, cur); }\n    System.out.println(best);\n  }\n}`,
+  "valid-parentheses": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String s = sc.next();\n    Deque<Character> st = new ArrayDeque<>();\n    for (char c : s.toCharArray()) {\n      if (c == '(' || c == '[' || c == '{') st.push(c);\n      else {\n        if (st.isEmpty()) { System.out.println("false"); return; }\n        char t = st.pop();\n        if ((c==')'&&t!='(')||(c==']'&&t!='[')||(c=='}'&&t!='{')) { System.out.println("false"); return; }\n      }\n    }\n    System.out.println(st.isEmpty() ? "true" : "false");\n  }\n}`,
+  "climbing-stairs": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    long n = sc.nextLong();\n    long a = 1, b = 1;\n    for (long i = 1; i < n; i++) { long c = a + b; a = b; b = c; }\n    System.out.println(b);\n  }\n}`,
+  "palindrome-number": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    long x = sc.nextLong();\n    if (x < 0) { System.out.println("false"); return; }\n    String s = String.valueOf(x);\n    System.out.println(new StringBuilder(s).reverse().toString().equals(s) ? "true" : "false");\n  }\n}`,
+  "binary-search": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String line = sc.nextLine();\n    String[] parts = line.split(" ");\n    int[] a = new int[parts.length];\n    for (int i = 0; i < parts.length; i++) a[i] = Integer.parseInt(parts[i]);\n    int t = sc.nextInt();\n    int lo = 0, hi = a.length - 1, ans = -1;\n    while (lo <= hi) { int mid = (lo+hi)/2; if (a[mid]==t) { ans=mid; break; } else if (a[mid]<t) lo=mid+1; else hi=mid-1; }\n    System.out.println(ans);\n  }\n}`,
+  "contains-duplicate": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String line = sc.nextLine();\n    String[] parts = line.split(" ");\n    Set<Integer> seen = new HashSet<>();\n    boolean dup = false;\n    for (String p : parts) { int x = Integer.parseInt(p); if (seen.contains(x)) dup = true; seen.add(x); }\n    System.out.println(dup ? "true" : "false");\n  }\n}`,
+  "best-time-buy-sell": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String line = sc.nextLine();\n    String[] parts = line.split(" ");\n    int[] p = new int[parts.length];\n    for (int i = 0; i < parts.length; i++) p[i] = Integer.parseInt(parts[i]);\n    int mn = p[0], best = 0;\n    for (int i = 1; i < p.length; i++) { best = Math.max(best, p[i]-mn); mn = Math.min(mn, p[i]); }\n    System.out.println(best);\n  }\n}`,
+  "power-of-two": `import java.util.*;\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    long n = sc.nextLong();\n    System.out.println(n > 0 && (n & (n-1)) == 0 ? "true" : "false");\n  }\n}`,
+};
+const COMPILER_TEMPLATES = {
+  python: `# Welcome to the AlgoBattle playground!\n# Write any Python program and hit Run (Ctrl+Enter).\n\ndef main():\n    line = input()\n    print(f"you said: {line}")\n\nif __name__ == "__main__":\n    main()`,
+  cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write any C++ program and hit Run.\n    string line;\n    getline(cin, line);\n    cout << "you said: " << line << endl;\n    return 0;\n}`,
+  java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write any Java program and hit Run.\n        Scanner sc = new Scanner(System.in);\n        String line = sc.nextLine();\n        System.out.println("you said: " + line);\n    }\n}`,
+};
+function boilerplateFor(slug, lang){
+  if (lang === 'cpp') return CPP_BOILERPLATES[slug] || '';
+  if (lang === 'java') return JAVA_BOILERPLATES[slug] || '';
+  return BOILERPLATES[slug] || '';
+}
+
+function switchView(view){
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  ['problems','contests','compiler','add'].forEach(v => $('view-'+v).classList.toggle('active', v === view));
+  // Show only the active workspace; hide all others
+  document.querySelectorAll('.workspace').forEach(ws => {
+    ws.style.display = (ws.dataset.view === view) ? '' : 'none';
+  });
+  // Mount the toolbox (editor + console) into the active workspace's slot
+  mountToolbox(view);
+  if (view === 'problems'){
+    if (current === '__compiler__') current = lastProblemSlug;
+    renderProblemList();
+    select(current);          // reload statement + problem boilerplate
+  }
+  else if (view === 'contests') renderContests();
+  else if (view === 'compiler') setupCompiler(true);
+}
+
+// Mount the editor toolbox into the active workspace (or hide it for views that don't need it)
+const TOOLBOX = $('toolbox');
+const WORKSPACES = {
+  problems: $('ws-problems'),
+  compiler: $('ws-playground'),
+  contests: $('ws-contests'),
+  add:      $('ws-add'),
+};
+let _mountedView = null;
+function mountToolbox(view){
+  if (_mountedView === view) return;
+  if (TOOLBOX.parentElement) TOOLBOX.parentElement.removeChild(TOOLBOX);
+  if (view === 'problems' || view === 'compiler'){
+    const ws = WORKSPACES[view === 'compiler' ? 'compiler' : 'problems'];
+    const slot = ws.querySelector('.toolbox-slot');
+    slot.appendChild(TOOLBOX);
+    TOOLBOX.style.display = '';
+    setTimeout(() => syncEditor(), 0);
+  } else {
+    TOOLBOX.style.display = 'none';
+  }
+  _mountedView = view;
+}
+document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => switchView(b.dataset.view));
+
+function renderProblemList(){
+  $('problemsList').innerHTML =
+    PROBLEMS.map((p,i) => `
+    <div class="problem ${p.slug===current?'active':''}" onclick="select('${p.slug}')">
+      <span class="num">${i+1}</span><span class="name">${p.title.replace(/^\d+\.\s*/,'')}</span>
+      <span class="badge ${p.difficulty.toLowerCase()}">${p.difficulty}</span>
+    </div>`).join('') +
+    CUSTOM_PROBLEMS.map(p => `
+    <div class="problem ${p.slug===current?'active':''}" onclick="select('${p.slug}')">
+      <span class="num">★</span><span class="name">${esc(p.title)}</span>
+      <span class="badge custom">CUSTOM</span>
+    </div>`).join('');
+}
+function renderStatement(p){
+  $('statement').innerHTML = `
+    <h1>${p.title.replace(/^\d+\.\s*/,'')}</h1>
+    <div class="meta">
+      <span class="badge ${(p.difficulty||'custom').toLowerCase()}">${p.difficulty||'Custom'}</span>
+      ${p.hidden_count ? `<span>${p.hidden_count} hidden tests</span>` : ''}
+    </div>
+    <div class="desc">${p.description||''}
+      ${(p.examples||[]).map(([i,o]) => `
+        <div class="ex"><div class="lbl">Example</div>
+          <pre>Input:  ${esc(i)}</pre>
+          <pre>Output: ${esc(o)}</pre></div>`).join('')}
+    </div>`;
+}
+async function select(slug){
+  current = slug;
+  if (slug !== '__compiler__') lastProblemSlug = slug;
+  const p = PROBLEMS.find(x => x.slug === slug) || CUSTOM_PROBLEMS.find(x => x.slug === slug);
+  if (!p) return;
+  renderStatement(p);
+  $('editorContext').textContent = '';
+  codeEl.value = boilerplateFor(slug, $('lang').value);
+  syncEditor();
+  clearConsole();
+  renderProblemList();
+}
+
+function setupCompiler(force){
+  $('compilerLangNav').innerHTML = Object.keys(COMPILER_TEMPLATES).map(l =>
+    `<button class="lang-btn ${l===$('lang').value?'active':''}" onclick="setCompilerLang('${l}')">
+      ${l==='python'?'Python':l==='cpp'?'C++':'Java'}</button>`).join('');
+  if (force || current === '__compiler__' || !codeEl.value.trim()){
+    if (current !== '__compiler__') lastProblemSlug = current;
+    setCompilerLang($('lang').value);
+  }
+}
+function setCompilerLang(l){
+  $('lang').value = l;
+  document.querySelectorAll('#compilerLangNav .lang-btn').forEach(b => b.classList.toggle('active', b.textContent===(l==='python'?'Python':l==='cpp'?'C++':'Java')));
+  current = '__compiler__';
+  $('editorContext').textContent = '· playground';
+  codeEl.value = COMPILER_TEMPLATES[l];
+  syncEditor();
+  clearConsole();
+}
+
+async function api(path, body, token){
+  try {
+    const headers = {'Content-Type':'application/json'};
+    if (token) headers['X-Token'] = token;
+    const r = await fetch(path, { method:'POST', headers, body: JSON.stringify(body) });
+    let data = {};
+    try { data = await r.json(); } catch(e){}
+    return { ok: r.ok, status: r.status, data };
+  } catch(e){ return { ok:false, status:0, data:{ error:'network', detail:'Could not reach the server.' } }; }
+}
+function friendlyError(data, fallback){
+  if (!data) return fallback;
+  if (data.error === 'rate_limited') return 'Rate limited — max 10/min';
+  if (data.error === 'judge_backend_unreachable' || data.error === 'compiler_backend_unreachable') return 'Judge offline.';
+  if (data.error === 'network') return data.detail;
+  if (data.detail) return data.detail;
+  return fallback;
+}
+function clearConsole(){ $('consoleOut').innerHTML=''; $('consoleTests').innerHTML=''; showTab('output'); }
+function showTab(tab){
+  document.querySelectorAll('.console-tabs button').forEach(x => x.classList.toggle('active', x.dataset.tab===tab));
+  $('consoleOut').style.display = tab==='output' ? '' : 'none';
+  $('consoleTests').style.display = tab==='results' ? '' : 'none';
+}
+document.querySelectorAll('.console-tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+async function runCustom(){
+  const code = codeEl.value, stdin = $('customInput').value;
+  if (!code.trim()) return toast('Write some code first');
+  clearConsole();
+  lineOut($('consoleOut'), 'info', 'Running…');
+  const { ok, data } = await api('/api/compiler/run', { language: $('lang').value, code, stdin });
+  $('consoleOut').innerHTML = '';
+  if (!ok){ lineOut($('consoleOut'),'err', friendlyError(data,'Compiler unreachable')); return; }
+  lineOut($('consoleOut'), 'verdict '+data.verdict, data.verdict);
+  if (data.stdout) lineOut($('consoleOut'), 'out', data.stdout);
+  if (data.stderr) lineOut($('consoleOut'), 'err', data.stderr);
+  lineOut($('consoleOut'), 'info', `${data.runtime_ms}ms wall · ${data.cpu_time_ms}ms cpu · ${data.memory_kb}KB`);
+  showTab('output');
+}
+async function submit(){
+  const code = codeEl.value;
+  if (!code.trim()) return toast('Write some code first');
+  if (!authName){ openAuth(); return; }
+  if (current === '__compiler__') return toast('Pick a problem to Submit — use Run in the playground');
+  clearConsole();
+  const prob = PROBLEMS.find(p=>p.slug===current) || CUSTOM_PROBLEMS.find(p=>p.slug===current) || {title:current};
+  const isCustom = !!CUSTOM_PROBLEMS.find(p=>p.slug===current);
+  lineOut($('consoleOut'), 'info', `Judging ${prob.title.replace(/^\d+\.\s*/,'')}…`);
+  const path = isCustom ? '/api/submit/custom' : '/api/submit';
+  const payload = isCustom
+    ? { slug: current, language: $('lang').value, code, participant: authName, contest_id: activeContest }
+    : { slug: current, language: $('lang').value, code, mode:'submit', participant: authName, contest_id: activeContest };
+  const { ok, data } = await api(path, payload, authToken);
+  $('consoleOut').innerHTML = '';
+  if (!ok){ lineOut($('consoleOut'),'err', friendlyError(data,'Judge unreachable')); return; }
+  lineOut($('consoleOut'), 'verdict '+data.verdict, `${data.verdict} · ${data.score}`);
+  lineOut($('consoleOut'), 'info', `efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
+  if (data.hidden_summary) lineOut($('consoleOut'), 'info', `Hidden: ${data.hidden_summary.passed}/${data.hidden_summary.total} (${data.hidden_summary.verdict})`);
+  (data.results||[]).forEach((r,i) => {
+    lineOut($('consoleOut'), r.verdict==='AC'?'out':'err', `Test ${i+1}: ${r.verdict} (${r.runtime_ms}ms)`);
+    if (r.verdict!=='AC'){ lineOut($('consoleOut'),'err',`  in: ${r.input}  expected: ${r.expected}  got: ${r.actual||'(none)'}`); }
+  });
+  $('consoleTests').innerHTML = (data.results||[]).map((r,i) => `
+    <div class="test-card"><div class="th"><b>Test ${i+1}</b><span class="verdict ${r.verdict}">${r.verdict} · ${r.runtime_ms}ms</span></div>
+    <div class="io">Input<pre>${esc(r.input)}</pre>Expected<pre>${esc(r.expected)}</pre>
+    ${r.verdict!=='AC'?`Your output<pre class="errbox">${esc(r.actual||'(none)')}</pre>`:''}
+    ${r.error?`<pre class="errbox">${esc(r.error)}</pre>`:''}</div></div>`).join('') ||
+    '<div style="color:var(--muted);text-align:center;padding:14px">No results</div>';
+  showTab('results');
+  refreshLeaderboard();
+}
+
+function openAuth(){ $('authModal').classList.add('show'); $('nameInput').focus(); }
+function closeAuth(){ $('authModal').classList.remove('show'); }
+function updateAuthUI(){
+  $('authBtn').textContent = authName ? authName+(isAdmin?' ⭐':'') : 'Sign in';
+  $('adminPanel').classList.toggle('show', isAdmin);
+}
+$('nameOk').onclick = async () => {
+  const n = $('nameInput').value.trim();
+  if (!n) return toast('Enter a name');
+  const key = $('adminKeyInput').value.trim() || null;
+  const { ok, data } = await api('/api/auth/register', { name: n, admin_key: key });
+  if (!ok) return toast(data.detail || 'Registration failed');
+  authToken = data.token; authName = data.name; isAdmin = data.is_admin;
+  localStorage.setItem('ab_token', authToken); localStorage.setItem('ab_name', authName);
+  closeAuth(); updateAuthUI(); renderContests();
+  toast(`Signed in as ${authName}${isAdmin?' (admin)':''}`);
+};
+$('nameSkip').onclick = () => { closeAuth(); toast('Practicing anonymously'); };
+$('nameInput').addEventListener('keydown', e => { if (e.key==='Enter') $('nameOk').click(); });
+$('authBtn').onclick = () => {
+  if (authName){ authName=''; authToken=''; isAdmin=false; localStorage.removeItem('ab_token'); localStorage.removeItem('ab_name'); updateAuthUI(); toast('Signed out'); }
+  else openAuth();
+};
+updateAuthUI();
+
+async function renderContests(){
+  const grid = $('contestsGrid');
+  const sidebarList = $('contestsList');
+  try {
+    const r = await fetch('/api/contests');
+    const data = await r.json();
+    if (!data.length){
+      grid.innerHTML = `<div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+        <div class="t">No contests yet</div>
+        <div class="s">${isAdmin ? 'Create one using the Admin panel in the sidebar.' : 'Check back later — admins will publish contests here.'}</div>
+      </div>`;
+      if (sidebarList) sidebarList.innerHTML = '<div style="color:var(--text-3);font-size:11.5px;padding:8px 4px">No contests yet.</div>';
+      return;
+    }
+    grid.innerHTML = data.map(c => `
+      <div class="contest-card">
+        <div class="head"><b>${esc(c.name)}</b><span class="pill pill-${c.status}">${c.status}</span></div>
+        <div class="desc2">${esc(c.description||'')}</div>
+        <div class="actions">
+          <button class="btn primary small" onclick="joinContest(${c.id})">Compete</button>
+          <button class="btn ghost small" onclick="toggleStandings(${c.id})">Standings</button>
+        </div>
+        <div class="standings" id="standings-${c.id}"></div>
+      </div>`).join('');
+    if (sidebarList) sidebarList.innerHTML = data.map(c => `
+      <div class="contest-card" style="padding:10px 12px;margin-bottom:6px">
+        <div class="head" style="margin-bottom:4px"><b style="font-size:12.5px">${esc(c.name)}</b><span class="pill pill-${c.status}" style="font-size:9px;padding:2px 7px">${c.status}</span></div>
+        <div class="actions"><button class="btn primary small" onclick="joinContest(${c.id})">Compete</button><button class="btn ghost small" onclick="toggleStandings(${c.id})">Standings</button></div>
+        <div class="standings" id="standings-sb-${c.id}"></div>
+      </div>`).join('');
+  } catch(e){
+    grid.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div class="t">Judge offline</div>
+      <div class="s">Start the Codespace judge to see live contests.</div>
+    </div>`;
+    if (sidebarList) sidebarList.innerHTML = '<div class="empty-state" style="padding:14px 8px;margin:0"><div class="s">Judge offline</div></div>';
+  }
+}
+function joinContest(cid){ activeContest = cid; toast(`Competing in contest #${cid}`); switchView('problems'); }
+async function toggleStandings(cid){
+  const box = $('standings-'+cid);
+  box.classList.toggle('open');
+  if (!box.classList.contains('open')) return;
+  const r = await fetch(`/api/contests/${cid}/standings`);
+  const data = await r.json();
+  box.innerHTML = renderStandings(data);
+}
+function renderStandings(rows){
+  if (!rows || !rows.length) return '<div style="color:var(--muted);font-size:10.5px;padding:4px 0">No submissions yet.</div>';
+  return rows.map(r => `<div class="st-row"><span class="rank">#${r.rank}</span>
+    <span class="who">${esc(r.participant)}</span><span class="muted">${r.solved} solved</span>
+    <span class="muted">${r.total} pts</span></div>`).join('');
+}
+function openStandingsStream(cid){
+  try {
+    const es = new EventSource(`/api/contests/${cid}/standings/stream`);
+    es.onmessage = e => {
+      const box = $('standings-'+cid);
+      if (box && box.classList.contains('open')) box.innerHTML = renderStandings(JSON.parse(e.data));
+    };
+  } catch(e){}
+}
+$('ctCreate').onclick = async () => {
+  const slugs = $('ctSlugs').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const { ok, data } = await api('/api/contests', { name:$('ctName').value, description:$('ctDesc').value, problem_slugs:slugs }, authToken);
+  $('ctStatus').textContent = ok ? `Created #${data.id}` : (data.detail||data.error||'Failed');
+  renderContests();
+};
+$('ctStart').onclick = async () => { const cid=prompt('Contest ID:'); if(!cid)return;
+  const { ok,data } = await api(`/api/contests/${cid}/start`, {}, authToken);
+  $('ctStatus').textContent = ok?`Started #${cid}`:(data.detail||data.error||'Failed'); renderContests(); };
+$('ctEnd').onclick = async () => { const cid=prompt('Contest ID:'); if(!cid)return;
+  const { ok,data } = await api(`/api/contests/${cid}/end`, {}, authToken);
+  $('ctStatus').textContent = ok?`Ended #${cid}`:(data.detail||data.error||'Failed'); renderContests(); };
+$('ctPlag').onclick = async () => { const cid=prompt('Contest ID:'); if(!cid)return;
+  const r = await fetch(`/api/contests/${cid}/plagiarism`, { headers:{'X-Token':authToken} });
+  const data = await r.json();
+  const el = $('plagResults');
+  if (!data.length){ el.innerHTML='<div style="color:var(--green);font-size:10.5px;margin-top:6px">No suspicious pairs.</div>'; return; }
+  el.innerHTML = data.map(p => `<div class="plag-row">${esc(p.a.participant)} ↔ ${esc(p.b.participant)} · ${Math.round(p.similarity*100)}%</div>`).join('');
+};
+
+// === Live preview for the Add Problem form ===
+function updatePreview(){
+  const title = $('addTitle').value.trim();
+  const desc = $('addDesc').value.trim();
+  const cases = collectCases();
+
+  // Title
+  const tEl = $('previewTitle');
+  if (title){
+    tEl.textContent = title;
+    tEl.classList.remove('empty');
+  } else {
+    tEl.textContent = 'Untitled problem';
+    tEl.classList.add('empty');
+  }
+
+  // Description (with markdown rendering of **bold** and `code`)
+  const dEl = $('previewDesc');
+  if (desc){
+    dEl.innerHTML = esc(desc)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+    dEl.classList.remove('empty');
+  } else {
+    dEl.textContent = 'Your description will appear here as you type.';
+    dEl.classList.add('empty');
+  }
+
+  // Test count
+  $('previewTestCount').textContent = cases.length + ' test case' + (cases.length === 1 ? '' : 's');
+
+  // Examples
+  const exEl = $('previewExamples');
+  if (cases.length){
+    exEl.innerHTML = cases.slice(0, 3).map(([i, o], idx) => `
+      <div class="preview-ex">
+        <span class="lbl">Example ${idx + 1}</span>
+        <span style="color:var(--text-3)">Input:</span> ${esc(i).replace(/\n/g, ' ')}<br>
+        <span style="color:var(--text-3)">Output:</span> ${esc(o)}
+      </div>
+    `).join('') + (cases.length > 3 ? `<div style="font-size:10px;color:var(--text-4);text-align:center;padding:4px">+ ${cases.length - 3} more</div>` : '');
+  } else {
+    exEl.innerHTML = '';
+  }
+
+  // Char count
+  $('addTitleCount').textContent = (title.length) + ' / 80';
+}
+
+function addCaseRow(inp='', out=''){
+  const row = document.createElement('div'); row.className='case-row';
+  row.innerHTML = `<input class="case-in" placeholder="input" value="${esc(inp)}">
+    <input class="case-out" placeholder="output" value="${esc(out)}">
+    <button class="del" title="remove">✕</button>`;
+  row.querySelector('.del').onclick = () => { row.remove(); updatePreview(); };
+  row.querySelectorAll('input').forEach(i => i.addEventListener('input', updatePreview));
+  $('addCases').appendChild(row);
+  updatePreview();
+}
+function collectCases(){
+  return [...document.querySelectorAll('#addCases .case-row')]
+    .map(r => [r.querySelector('.case-in').value, r.querySelector('.case-out').value])
+    .filter(([i,o]) => i.trim()!=='' && o.trim()!=='');
+}
+async function saveProblem(){
+  const title = $('addTitle').value.trim();
+  const examples = collectCases();
+  const status = $('addStatus');
+  status.className = 'add-status';
+  status.textContent = 'saving…';
+  if (!title) { status.className='add-status error'; status.textContent='Need a title'; return; }
+  if (!examples.length) { status.className='add-status error'; status.textContent='Add at least 1 test case'; return; }
+  const { ok, data } = await api('/api/problems/custom', {
+    title, description: $('addDesc').value.trim() || 'No description.',
+    examples, creator: authName || 'Anonymous' });
+  if (!ok){
+    status.className='add-status error';
+    const errIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    status.innerHTML = errIcon + ' <span>' + esc(friendlyError(data, 'Save failed')) + '</span>';
+    return;
+  }
+  status.className = 'add-status success';
+  status.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved! Loading problem…';
+  await loadCustomProblems();
+  setTimeout(() => {
+    switchView('problems');
+    setTimeout(() => select(data.slug), 250);
+  }, 600);
+}
+
+// Wire up live preview
+$('addTitle').addEventListener('input', updatePreview);
+$('addDesc').addEventListener('input', updatePreview);
+
+// Cmd/Ctrl+Enter to save when in add view
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
+    const addVisible = $('ws-add').style.display !== 'none';
+    if (addVisible && (e.target === $('addTitle') || e.target === $('addDesc') ||
+        e.target.classList.contains('case-in') || e.target.classList.contains('case-out'))){
+      e.preventDefault();
+      saveProblem();
+    }
+  }
+});
+async function loadCustomProblems(){
+  try { const r = await fetch('/api/problems/custom'); CUSTOM_PROBLEMS = await r.json(); }
+  catch(e){ CUSTOM_PROBLEMS = []; }
+  renderProblemList();
+}
+
+async function refreshLeaderboard(){
+  try {
+    const r = await fetch('/api/leaderboard'); const data = await r.json();
+    const body = $('lbBody');
+    if (!data.length){ body.innerHTML = '<div style="padding:18px;color:var(--muted);text-align:center">No submissions yet.</div>'; return; }
+    body.innerHTML = data.map(e => `<div class="lb-row">
+      <span class="rank">${e.rank}</span>
+      <span class="who"><span class="p">${esc(e.participant)}</span><span class="m">${esc(e.problem)} · ${esc(e.language)}</span></span>
+      <span class="res"><span class="verdict ${e.verdict}">${e.verdict}</span></span>
+      <span class="met">${e.score}</span></div>`).join('');
+  } catch(e){}
+}
+
+async function checkHealth(){
+  try {
+    const r = await fetch('/health'); const ok = r.ok;
+    $('healthDot').className = 'dot' + (ok?' on':'');
+    $('healthText').textContent = ok ? 'online' : 'offline';
+  } catch(e){ $('healthDot').className='dot'; $('healthText').textContent='offline'; }
+}
+
+$('btnRun').onclick = runCustom;
+$('btnRunCustom').onclick = runCustom;
+$('btnSubmit').onclick = submit;
+$('lang').onchange = () => {
+  if (current === '__compiler__'){ setCompilerLang($('lang').value); return; }
+  codeEl.value = boilerplateFor(current, $('lang').value); syncEditor(); clearConsole();
+};
+$('showLb').onclick = () => { $('drawer').classList.add('open'); $('overlay').classList.add('show'); refreshLeaderboard(); };
+$('closeLb').onclick = () => { $('drawer').classList.remove('open'); $('overlay').classList.remove('show'); };
+$('overlay').onclick = $('closeLb').onclick;
+
+$('addCaseRow').onclick = () => addCaseRow();
+addCaseRow();
+$('addSubmit').onclick = saveProblem;
+select(current);
+loadCustomProblems();
+renderContests();
+openStandingsStream(1);
+refreshLeaderboard();
+checkHealth();
+setInterval(checkHealth, 15000);
+setInterval(refreshLeaderboard, 20000);
+syncEditor();
+
+// === New: problem filter, reset, dirty dot, playground breadcrumb, results badge, leaderboard top-3 ===
+
+// Wire the filter input
+$('problemFilter').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('#problemsList .problem').forEach(row => {
+    const name = row.dataset.name || '';
+    row.style.display = (!q || name.toLowerCase().includes(q)) ? '' : 'none';
+  });
+});
+
+// Update problem count in sidebar
+function updateProblemCount(){
+  const total = PROBLEMS.length + CUSTOM_PROBLEMS.length;
+  const custom = CUSTOM_PROBLEMS.length;
+  $('problemCount').textContent = custom ? `${total} (${custom} custom)` : `${total}`;
+}
+
+// Reset to boilerplate
+$('btnReset').onclick = () => {
+  if (current === '__compiler__'){
+    setCompilerLang($('lang').value);
+  } else {
+    codeEl.value = boilerplateFor(current, $('lang').value);
+    syncEditor();
+  }
+  toast('Reset to boilerplate');
+};
+
+// Track dirty state (editor has changes vs boilerplate)
+let isDirty = false;
+function updateDirty(){
+  if (current === '__compiler__'){ isDirty = codeEl.value !== COMPILER_TEMPLATES[$('lang').value]; }
+  else { isDirty = codeEl.value !== boilerplateFor(current, $('lang').value); }
+  $('editorDirtyDot').style.display = isDirty ? '' : 'none';
+  $('editorContext').textContent = isDirty ? 'edited' : '';
+}
+codeEl.addEventListener('input', updateDirty);
+
+// Update results badge
+function updateResultsBadge(results){
+  if (!results || !results.length){ $('resultsBadge').style.display='none'; return; }
+  const passed = results.filter(r => r.verdict === 'AC').length;
+  const total = results.length;
+  $('resultsBadge').textContent = `${passed}/${total} passed`;
+  $('resultsBadge').className = 'results-badge ' + (passed === total ? 'has-data' : 'has-fail');
+  $('resultsBadge').style.display = '';
+}
+
+// Patch submit() to update the badge
+const _origSubmit = submit;
+// wrap by calling updateResultsBadge inside submit's flow — but submit is async.
+// Instead, override consoleTests rendering: when results render, also update badge.
+
+// Update auth UI: show avatar when signed in (do NOT call _origUpdateAuth — it clobbers our DOM)
+updateAuthUI = function(){
+  try { $('adminPanel').classList.toggle('show', isAdmin); } catch(e){}
+  const avatar = $('authAvatar');
+  const dot = $('authAdminDot');
+  const text = $('authBtnText');
+  if (authName){
+    if (avatar){
+      avatar.textContent = authName.charAt(0).toUpperCase();
+      avatar.style.display = '';
+    }
+    if (text) text.textContent = authName;
+    if (dot) dot.style.display = isAdmin ? '' : 'none';
+  } else {
+    if (avatar) avatar.style.display = 'none';
+    if (text) text.textContent = 'Sign in';
+    if (dot) dot.style.display = 'none';
+  }
+};
+
+// Body scroll lock on drawer
+$('showLb').onclick = () => {
+  $('drawer').classList.add('open');
+  $('overlay').classList.add('show');
+  document.body.classList.add('modal-open');
+  refreshLeaderboard();
+};
+$('closeLb').onclick = () => {
+  $('drawer').classList.remove('open');
+  $('overlay').classList.remove('show');
+  document.body.classList.remove('modal-open');
+};
+$('overlay').onclick = $('closeLb').onclick;
+
+// Switch view: toggle playground breadcrumb vs statement, also handle leaderboard column class
+const _origSwitchView = switchView;
+switchView = function(view){
+  _origSwitchView(view);
+  $('statement').style.display = (view === 'compiler') ? 'none' : '';
+  $('playgroundBreadcrumb').style.display = (view === 'compiler') ? '' : 'none';
+  $('editorContext').textContent = (view === 'compiler') ? '' : (current !== '__compiler__' ? '' : '');
+  updateProblemCount();
+};
+
+// Patch renderContests: nicer empty state
+const _origRenderContests = renderContests;
+renderContests = async function(){
+  const el = $('contestsList');
+  try {
+    const r = await fetch('/api/contests');
+    const data = await r.json();
+    if (!data.length){
+      el.innerHTML = `<div class="empty-state">
+        <svg><use href="#i-cup"/></svg>
+        <div class="t">No contests yet</div>
+        <div class="s">${isAdmin ? 'Create one below using the Admin panel.' : 'Check back later — admins will publish contests here.'}</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = data.map(c => `
+      <div class="contest-card">
+        <div class="head"><b>${esc(c.name)}</b><span class="pill pill-${c.status}">${c.status}</span></div>
+        <div class="desc2">${esc(c.description||'')}</div>
+        <div class="actions">
+          <button class="btn primary small" onclick="joinContest(${c.id})">Compete</button>
+          <button class="btn ghost small" onclick="toggleStandings(${c.id})">Standings</button>
+        </div>
+        <div class="standings" id="standings-${c.id}"></div>
+      </div>`).join('');
+  } catch(e){
+    el.innerHTML = `<div class="empty-state">
+      <svg><use href="#i-warn"/></svg>
+      <div class="t">Judge offline</div>
+      <div class="s">Start the Codespace judge to see live contests.</div>
+    </div>`;
+  }
+};
+
+// Patch renderStandings: rank-aware color, gold for top 3
+const _origRenderStandings = renderStandings;
+renderStandings = function(rows){
+  if (!rows || !rows.length) return '<div style="color:var(--text-3);font-size:11px;padding:12px 4px;text-align:center">No submissions yet.</div>';
+  return rows.map(r => `<div class="st-row">
+    <span class="rank ${r.rank<=3?'gold':''}">#${r.rank}</span>
+    <span class="who">${esc(r.participant)}</span>
+    <span class="muted">${r.solved}/${r.total}</span>
+  </div>`).join('');
+};
+
+// Patch refreshLeaderboard: top-3 highlight, cleaner empty state
+const _origRefreshLeaderboard = refreshLeaderboard;
+refreshLeaderboard = async function(){
+  try {
+    const r = await fetch('/api/leaderboard');
+    const data = await r.json();
+    const body = $('lbBody');
+    if (!data.length){
+      body.innerHTML = `<div class="empty-state" style="margin:20px 14px">
+        <svg><use href="#i-trophy"/></svg>
+        <div class="t">No submissions yet</div>
+        <div class="s">Be the first — submit a solution to claim the top spot.</div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = data.map((e, i) => {
+      const top3 = i < 3;
+      return `<div class="lb-row${top3?' top3':''}">
+        <span class="rank">${e.rank}</span>
+        <span class="who"><span class="p">${esc(e.participant)}</span><span class="m">${esc(e.problem)} · ${esc(e.language)}</span></span>
+        <span class="res"><span class="verdict ${e.verdict}">${e.verdict}</span></span>
+        <span class="met">${e.score}</span>
+      </div>`;
+    }).join('');
+  } catch(e){}
+};
+
+// Patch renderProblemList: data-name for filter, dot for custom problems
+const _origRenderProblemList = renderProblemList;
+renderProblemList = function(){
+  $('problemsList').innerHTML =
+    PROBLEMS.map((p,i) => `
+    <div class="problem ${p.slug===current?'active':''}" data-slug="${p.slug}" data-name="${esc(p.title)}" onclick="select('${p.slug}')">
+      <span class="num">${i+1}</span><span class="name">${p.title.replace(/^\d+\.\s*/,'')}</span>
+      <span class="badge ${p.difficulty.toLowerCase()}">${p.difficulty}</span>
+    </div>`).join('') +
+    CUSTOM_PROBLEMS.map(p => `
+    <div class="problem ${p.slug===current?'active':''}" data-slug="${p.slug}" data-name="${esc(p.title)}" onclick="select('${p.slug}')">
+      <span class="problem-custom-dot"></span><span class="name">${esc(p.title)}</span>
+      <span class="badge custom">CUSTOM</span>
+    </div>`).join('');
+  updateProblemCount();
+  // re-apply current filter
+  const f = $('problemFilter');
+  if (f && f.value){ f.dispatchEvent(new Event('input')); }
+};
+
+// Patch renderStatement: cleaner example cards
+const _origRenderStatement = renderStatement;
+renderStatement = function(p){
+  // Convert **bold** to <strong> and inline `code` to <code> in description
+  const desc = (p.description||'').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const examples = (p.examples||[]).map(([i,o], idx) => `
+    <div class="ex">
+      <div class="lbl">Example ${idx+1}</div>
+      <pre>Input: ${esc(i).replace(/\n/g, '\n        ')}</pre>
+      <pre>Output: ${esc(o)}</pre>
+    </div>`).join('');
+  $('statement').innerHTML = `
+    <h1>${p.title.replace(/^\d+\.\s*/,'')}</h1>
+    <div class="meta">
+      <span class="badge ${(p.difficulty||'custom').toLowerCase()}">${p.difficulty||'Custom'}</span>
+      ${p.hidden_count ? `<span class="sep">·</span><span>${p.hidden_count} hidden tests</span>` : ''}
+      ${p.creator ? `<span class="sep">·</span><span>by ${esc(p.creator)}</span>` : ''}
+    </div>
+    <div class="desc">${desc}${examples}</div>`;
+};
+
+// Patch select: clear dirty state, show problem context
+const _origSelect = select;
+select = async function(slug){
+  await _origSelect(slug);
+  const p = PROBLEMS.find(x => x.slug === slug) || CUSTOM_PROBLEMS.find(x => x.slug === slug);
+  if (p){
+    const title = p.title.replace(/^\d+\.\s*/,'');
+    $('editorContext').textContent = '';
+    $('editorContext').innerHTML = `· <span style="color:var(--text-2)">${esc(title)}</span>`;
+  }
+  updateDirty();
+};
+
+// Patch setCompilerLang: hide "· playground" context
+const _origSetCompilerLang = setCompilerLang;
+setCompilerLang = function(l){
+  _origSetCompilerLang(l);
+  $('editorContext').textContent = '';
+  $('editorContext').innerHTML = `· <span style="color:var(--text-2)">Playground</span>`;
+  updateDirty();
+};
+
+// Patch runCustom: better error display, info about the run
+const _origRunCustom = runCustom;
+runCustom = async function(){
+  await _origRunCustom();
+  // Done — toast on success, no further action
+};
+
+// Patch submit: update results badge
+const _origSubmitFunc = submit;
+submit = async function(){
+  // capture the next data by hooking fetch? simpler: wrap and refresh badge after
+  const code = codeEl.value;
+  if (!code.trim()) return toast('Write some code first');
+  if (!authName){ openAuth(); return; }
+  if (current === '__compiler__') return toast('Pick a problem to Submit — use Run in the playground');
+  clearConsole();
+  const prob = PROBLEMS.find(p=>p.slug===current) || CUSTOM_PROBLEMS.find(p=>p.slug===current) || {title:current};
+  const isCustom = !!CUSTOM_PROBLEMS.find(p=>p.slug===current);
+  lineOut($('consoleOut'), 'info', `Judging ${prob.title.replace(/^\d+\.\s*/,'')}…`);
+  const path = isCustom ? '/api/submit/custom' : '/api/submit';
+  const payload = isCustom
+    ? { slug: current, language: $('lang').value, code, participant: authName, contest_id: activeContest }
+    : { slug: current, language: $('lang').value, code, mode:'submit', participant: authName, contest_id: activeContest };
+  const { ok, data } = await api(path, payload, authToken);
+  $('consoleOut').innerHTML = '';
+  if (!ok){ lineOut($('consoleOut'),'err', friendlyError(data,'Judge unreachable')); return; }
+  lineOut($('consoleOut'), 'verdict '+data.verdict, `${data.verdict} · ${data.score}`);
+  lineOut($('consoleOut'), 'info', `efficiency ${data.efficiency} · cpu ${data.cpu_time_ms}ms`);
+  if (data.hidden_summary) lineOut($('consoleOut'), 'info', `Hidden: ${data.hidden_summary.passed}/${data.hidden_summary.total} (${data.hidden_summary.verdict})`);
+  (data.results||[]).forEach((r,i) => {
+    lineOut($('consoleOut'), r.verdict==='AC'?'out':'err', `Test ${i+1}: ${r.verdict} (${r.runtime_ms}ms)`);
+    if (r.verdict!=='AC'){ lineOut($('consoleOut'),'err',`  in: ${r.input}  expected: ${r.expected}  got: ${r.actual||'(none)'}`); }
+  });
+  $('consoleTests').innerHTML = (data.results||[]).map((r,i) => `
+    <div class="test-card"><div class="th"><b>Test ${i+1}</b><span class="verdict ${r.verdict}">${r.verdict} · ${r.runtime_ms}ms</span></div>
+    <div class="io">
+      <div class="field"><div class="field-label">Input</div><pre>${esc(r.input)}</pre></div>
+      <div class="field"><div class="field-label">Expected</div><pre>${esc(r.expected)}</pre></div>
+      ${r.verdict!=='AC'?`<div class="field"><div class="field-label">Your output</div><pre class="errbox">${esc(r.actual||'(none)')}</pre></div>`:''}
+      ${r.error?`<div class="field"><div class="field-label">Error</div><pre class="errbox">${esc(r.error)}</pre></div>`:''}
+    </div></div>`).join('') ||
+    '<div class="empty-state" style="margin:14px"><div class="t">No results</div></div>';
+  updateResultsBadge(data.results);
+  showTab('results');
+  refreshLeaderboard();
+};
+
+// Patch checkHealth: cleaner status pill, online vs offline classes
+const _origCheckHealth = checkHealth;
+checkHealth = async function(){
+  try {
+    const r = await fetch('/health');
+    const ok = r.ok;
+    $('healthDot').className = 'dot' + (ok?' on':'');
+    $('healthText').textContent = ok ? 'online' : 'offline';
+    $('statusPill').className = 'status ' + (ok?'online':'offline');
+  } catch(e){
+    $('healthDot').className = 'dot';
+    $('healthText').textContent = 'offline';
+    $('statusPill').className = 'status offline';
+  }
+};
+
+// Patch toast: accept kind arg
+const _origToast = toast;
+toast = function(msg, ms=2600, kind=''){
+  const t = $('toast');
+  // detect kind from message
+  let detected = kind;
+  if (!detected && /fail|error|offline|invalid|wrong|wrong/i.test(msg)) detected = 'error';
+  else if (!detected && /saved|signed|success|done|signed in|added|reset/i.test(msg)) detected = 'success';
+  t.className = 'toast' + (detected ? ' '+detected : '');
+  t.innerHTML = (detected === 'success' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : detected === 'error' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' : '') + '<span>'+esc(msg)+'</span>';
+  t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>t.classList.remove('show'), ms);
+};
+
+// rAF-batched syncEditor for performance on large pastes
+let rafPending = false;
+function scheduleSync(){
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => { rafPending = false; syncEditor(); updateDirty(); });
+}
+codeEl.removeEventListener('input', syncEditor);
+codeEl.addEventListener('input', scheduleSync);
+
+// === Final: re-init with new view setup ===
+mountToolbox('problems');
+select(current);
+loadCustomProblems();
+renderContests();
+openStandingsStream(1);
+refreshLeaderboard();
+checkHealth();
+setInterval(checkHealth, 15000);
+setInterval(refreshLeaderboard, 20000);
+syncEditor();
+updateProblemCount();
+updateAuthUI();
+// Apply ?view= deep link
+(function(){
+  const raw = new URLSearchParams(location.search).get('view');
+  if (!raw) return;
+  const aliases = { playground: 'compiler' };
+  const v = aliases[raw] || raw;
+  if (['problems','contests','compiler','add'].includes(v)) switchView(v);
+})();
+</script>
+</body>
+</html>

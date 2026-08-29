@@ -1,0 +1,51 @@
+# ============================================================================
+# Pod Disruption Budgets — protect against voluntary disruptions
+# ============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "algobattle.fullname" . }}-api
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.api.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "api") | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge") | nindent 4 }}
+spec:
+  # At least 1 judge worker always available
+  minAvailable: {{ .Values.podDisruptionBudget.judge.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "judge") | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "algobattle.fullname" . }}-frontend
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.frontend.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "frontend") | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "algobattle.fullname" . }}-prometheus
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.prometheus.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "prometheus") | nindent 6 }}

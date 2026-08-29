@@ -1,0 +1,71 @@
+{{- /* Horizontal Pod Autoscaler */ -}}
+{{- if .Values.judge.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "algobattle.fullname" . }}-judge
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "judge") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "algobattle.fullname" . }}-judge
+  minReplicas: {{ .Values.judge.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.judge.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.judge.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.judge.autoscaling.targetQueueDepth }}
+    # Requires Prometheus Adapter (https://github.com/kubernetes-sigs/prometheus-adapter)
+    # to expose the rq_jobs_queue_size metric as `rq_queue_depth`.
+    - type: Pods
+      pods:
+        metric:
+          name: rq_queue_depth
+        target:
+          type: AverageValue
+          averageValue: {{ .Values.judge.autoscaling.targetQueueDepth }}
+    {{- end }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+{{- end }}
+
+{{- if .Values.api.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "algobattle.fullname" . }}-api
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "algobattle.fullname" . }}-api
+  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

@@ -1,0 +1,7 @@
+node_modules/
+out/
+.esbuild.cache/
+.vscode-test-workspace/
+.vscode-test/
+*.vsix
+.DS_Store

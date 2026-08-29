@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algobattle.fullname" . }}-config
+  labels:
+    {{- include "algobattle.labels" . | nindent 4 }}
+data:
+  # ----------------------------------------------------------------------
+  # Non-secret runtime config consumed via envFrom: configMapRef
+  # ----------------------------------------------------------------------
+  ENVIRONMENT: {{ .Values.api.env.ENVIRONMENT | default "production" | quote }}
+  LOG_LEVEL: {{ .Values.api.env.LOG_LEVEL | default "info" | quote }}
+  RQ_QUEUE_NAME: {{ .Values.api.env.RQ_QUEUE_NAME | default "submissions" | quote }}
+  CORS_ORIGINS: {{ .Values.api.env.CORS_ORIGINS | quote }}
+  JUDGE_WORKER_CONCURRENCY: {{ .Values.judge.concurrency | default 4 | quote }}
+  JUDGE0_URL: http://{{ include "algobattle.fullname" . }}-judge0:2358
+  POSTGRES_HOST: {{ include "algobattle.fullname" . }}-postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: algobattle
+  REDIS_HOST: {{ include "algobattle.fullname" . }}-redis
+  REDIS_PORT: "6379"
+  PROMETHEUS_MULTIPROC_DIR: /tmp/prom_multiproc
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "algobattle.fullname" . }}-prometheus-config
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        monitor: algobattle
+        release: {{ .Release.Name }}
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: algobattle-api
+        static_configs:
+          - targets: ['{{ include "algobattle.fullname" . }}-api:9090']
+        metrics_path: /metrics
+
+      - job_name: algobattle-judge
+        static_configs:
+          - targets: ['{{ include "algobattle.fullname" . }}-judge:9100']
+
+      - job_name: judge0
+        static_configs:
+          - targets: ['{{ include "algobattle.fullname" . }}-judge0:2358']
+
+      - job_name: postgres
+        static_configs:
+          - targets: ['{{ include "algobattle.fullname" . }}-postgres:9187']
+
+      - job_name: redis
+        static_configs:
+          - targets: ['{{ include "algobattle.fullname" . }}-redis:9121']
+
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+
+  alerts.yml: |
+    groups:
+      - name: api
+        rules:
+          - alert: ApiDown
+            expr: up{job="algobattle-api"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "API is down"
+
+      - name: judge
+        rules:
+          - alert: JudgeQueueBacklog
+            expr: rq_jobs_queue_size > 1000
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Judge queue depth > 1000"

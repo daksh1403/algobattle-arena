@@ -1,0 +1,65 @@
+# ============================================================================
+# Algobattle infra — gitignore
+# ============================================================================
+
+# Env
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Terraform
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/*.tfvars
+!terraform/aws/environments/*.tfvars
+terraform/**/*.tfplan
+terraform/**/*.tfplan.lock
+terraform/**/.terraform.lock.hcl
+
+# Helm
+helm/charts/
+*.tgz
+
+# Docker
+**/Dockerfile.bak
+**/*.dockerfile.bak
+
+# Local IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+node_modules/
+.cache/
+
+# OS
+Thumbs.db
+
+# Secrets (defense in depth — never commit)
+*.pem
+*.key
+*.crt
+secrets/

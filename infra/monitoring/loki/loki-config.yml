@@ -1,0 +1,88 @@
+# ============================================================================
+# Loki — single-binary mode (no microservices)
+# ----------------------------------------------------------------------------
+# Sized for low-volume logs from a small platform. ~256 MB RAM.
+# Retention: $LOKI_RETENTION (default 168h = 7 days) — change in production.
+# ============================================================================
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  log_level: info
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  retention_period: 168h        # 7 days — change via env override
+  retention_stream:
+    - selector: '{job="algobattle-api"}'
+      priority: 1
+  allow_structured_metadata: true
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+  max_entries_limit_per_query: 5000
+  max_query_series: 500
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # Per-stream rate limit — keeps a chatty container from filling disk
+  per_stream_rate_limit: 4MB
+  per_stream_burst_factor: 1.5
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+        ttl: 24h
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-tmp
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+analytics:
+  reporting_enabled: false

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: algobattle
+description: |
+  Algobattle — competitive coding judge platform. Single chart that deploys
+  the API, judge workers (RQ, scalable via HPA), Judge0 cluster (privileged
+  for cgroups), Postgres, Redis, frontend, and monitoring.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/your-org/algobattle
+maintainers:
+  - name: Algobattle Platform Team
+    email: platform@algobattle.example.com
+keywords:
+  - coding-judge
+  - competitive-programming
+  - judge0
+  - rq

@@ -1,0 +1,294 @@
+# ============================================================================
+# Prometheus — alert rules
+# ----------------------------------------------------------------------------
+# Severity conventions:
+#   critical — pages on-call, requires immediate action
+#   warning  — Slack, investigate within business day
+#   info     — Slack #ops, just so you know
+# ============================================================================
+
+groups:
+  # -------------------------------------------------------------------------
+  # API
+  # -------------------------------------------------------------------------
+  - name: api
+    interval: 30s
+    rules:
+      - alert: ApiDown
+        expr: up{job="algobattle-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Algobattle API is DOWN"
+          description: "algobattle-api has been unreachable for 1 minute. Users cannot submit or fetch data."
+          runbook: "https://github.com/your-org/algobattle/wiki/runbooks/api-down"
+
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="algobattle-api",status=~"5.."}[5m]))
+            /
+          sum(rate(http_requests_total{job="algobattle-api"}[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API 5xx error rate > 5%"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last 5m."
+
+      - alert: ApiHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="algobattle-api"}[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API p99 latency > 2s"
+          description: "p99 latency is {{ $value | humanizeDuration }} over the last 10m."
+
+      - alert: ApiHighLatencyP99Critical
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="algobattle-api"}[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API p99 latency > 5s (critical)"
+          description: "p99 latency is {{ $value | humanizeDuration }}. Users are suffering."
+
+  # -------------------------------------------------------------------------
+  # Judge queue
+  # -------------------------------------------------------------------------
+  - name: judge-queue
+    interval: 30s
+    rules:
+      - alert: JudgeQueueBacklog
+        expr: rq_jobs_queue_size > 1000
+        for: 15m
+        labels:
+          severity: warning
+          service: judge
+        annotations:
+          summary: "Judge queue depth > 1000"
+          description: "{{ $value }} submissions waiting in RQ for 15m. Scale judge workers (HPA or `make scale N=20`)."
+
+      - alert: JudgeQueueBacklogCritical
+        expr: rq_jobs_queue_size > 5000
+        for: 10m
+        labels:
+          severity: critical
+          service: judge
+        annotations:
+          summary: "Judge queue depth > 5000 (critical)"
+          description: "{{ $value }} submissions queued — workers are saturated or Judge0 is unhealthy."
+
+      - alert: JudgeErrorRateHigh
+        expr: |
+          sum(rate(judge_submission_total{status="error"}[10m]))
+            /
+          sum(rate(judge_submission_total[10m]))
+            > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: judge
+        annotations:
+          summary: "Judge error rate > 5%"
+          description: "{{ $value | humanizePercentage }} of submissions failed in the last 10m."
+
+      - alert: JudgeNoWorkersActive
+        expr: rq_workers_active == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: judge
+        annotations:
+          summary: "No active RQ workers"
+          description: "Zero RQ workers have been active for 2m — submissions will not be processed."
+
+  # -------------------------------------------------------------------------
+  # Judge0
+  # -------------------------------------------------------------------------
+  - name: judge0
+    interval: 30s
+    rules:
+      - alert: Judge0Down
+        expr: up{job="judge0"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: judge0
+        annotations:
+          summary: "Judge0 is DOWN"
+          description: "judge0-server has been unreachable for 1 minute. Submissions cannot be executed."
+
+      - alert: Judge0Slow
+        expr: judge0_request_duration_seconds_avg > 15
+        for: 10m
+        labels:
+          severity: warning
+          service: judge0
+        annotations:
+          summary: "Judge0 submissions averaging > 15s"
+          description: "Avg execution time {{ $value | humanizeDuration }} — possible runaway processes."
+
+      - alert: Judge0MemoryHigh
+        expr: |
+          container_memory_working_set_bytes{name=~".*judge0.*"}
+            / container_spec_memory_limit_bytes{name=~".*judge0.*"}
+            > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: judge0
+
+  # -------------------------------------------------------------------------
+  # Database
+  # -------------------------------------------------------------------------
+  - name: database
+    interval: 30s
+    rules:
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "Postgres exporter DOWN"
+          description: "We cannot scrape Postgres metrics. Either DB is down or the exporter is."
+
+      - alert: PostgresConnectionsHigh
+        expr: pg_stat_activity_count > 180
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "Postgres connections > 180"
+          description: "{{ $value }} active connections (limit is 200)."
+
+      - alert: PostgresDiskHigh
+        expr: |
+          (pg_database_size_bytes{datname="algobattle"}
+            / (1024*1024*1024))
+            > 40
+        for: 10m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "algobattle DB > 40 GB"
+          description: "Database size {{ $value | humanize }} GB. Provisioned 50 GB gp3 — clean up or expand."
+
+      - alert: PostgresReplicationLag
+        expr: pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "Postgres replica lag > 30s"
+          description: "Replica is {{ $value }}s behind primary."
+
+      - alert: PostgresLongQueries
+        expr: pg_stat_activity_max_tx_duration{state="active"} > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "Long-running query > 5 minutes"
+
+  # -------------------------------------------------------------------------
+  # Redis
+  # -------------------------------------------------------------------------
+  - name: redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis memory > 85%"
+          description: "Redis is using {{ $value | humanizePercentage }} of its maxmemory."
+
+  # -------------------------------------------------------------------------
+  # Host / node
+  # -------------------------------------------------------------------------
+  - name: host
+    interval: 30s
+    rules:
+      - alert: HostHighCpu
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU > 85%"
+          description: "{{ $labels.instance }} CPU at {{ $value | humanize }}%."
+
+      - alert: HostHighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory > 90%"
+          description: "{{ $labels.instance }} memory at {{ $value | humanize }}%."
+
+      - alert: HostDiskHigh
+        expr: |
+          (1 - (node_filesystem_avail_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"})) * 100
+          > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage > 80%"
+          description: "{{ $labels.instance }} disk at {{ $value | humanize }}%."
+
+      - alert: HostDiskWillFillIn4Hours
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 4*3600) < 0
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk will fill within 4 hours"
+          description: "{{ $labels.instance }} projected to run out of disk."
+
+  # -------------------------------------------------------------------------
+  # TLS / cert expiry
+  # -------------------------------------------------------------------------
+  - name: tls
+    interval: 5m
+    rules:
+      - alert: TLSCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expires in < 14 days"
+          description: "Cert for {{ $labels.instance }} expires {{ $value | humanizeDuration }}."

@@ -1,0 +1,173 @@
+{
+  "name": "algobattle",
+  "displayName": "Algobattle",
+  "description": "Solve LeetCode-style problems and compete, all from VS Code",
+  "version": "0.1.0",
+  "publisher": "algobattle",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "keywords": [
+    "leetcode",
+    "competitive-programming",
+    "judge",
+    "education",
+    "contest"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Education"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "out/extension.js",
+  "icon": "resources/icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "algobattle.login",
+        "title": "Algobattle: Login",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.logout",
+        "title": "Algobattle: Logout",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.browseProblems",
+        "title": "Algobattle: Browse Problems",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.openProblem",
+        "title": "Algobattle: Open Problem",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.pickProblem",
+        "title": "Algobattle: Pick Problem",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.runTests",
+        "title": "Algobattle: Run Tests",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.submit",
+        "title": "Algobattle: Submit",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.showLeaderboard",
+        "title": "Algobattle: Show Leaderboard",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.contestJoin",
+        "title": "Algobattle: Join Contest",
+        "category": "Algobattle"
+      },
+      {
+        "command": "algobattle.setApiUrl",
+        "title": "Algobattle: Set API URL",
+        "category": "Algobattle"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "algobattle.problems",
+          "name": "Problems"
+        },
+        {
+          "id": "algobattle.contests",
+          "name": "Contests"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Algobattle",
+      "properties": {
+        "algobattle.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000/api",
+          "description": "Algobattle API endpoint base URL",
+          "scope": "application"
+        },
+        "algobattle.defaultLanguage": {
+          "type": "string",
+          "default": "python3",
+          "enum": [
+            "python3",
+            "javascript",
+            "cpp"
+          ],
+          "description": "Default language used when opening a new problem"
+        },
+        "algobattle.autoSubmitOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run tests automatically when a problem file is saved"
+        },
+        "algobattle.outputVerbosity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "debug",
+            "warn",
+            "error"
+          ],
+          "default": "info",
+          "description": "Minimum verbosity level for the Algobattle output channel"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "algobattle.runTests",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "editorLangId == python || editorLangId == javascript || editorLangId == cpp"
+      },
+      {
+        "command": "algobattle.submit",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "editorLangId == python || editorLangId == javascript || editorLangId == cpp"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "algobattle.contestJoin",
+          "when": "algobattle.authed"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "vsce package",
+    "test": "vscode-test",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.3.9",
+    "esbuild": "^0.21.5",
+    "mocha": "^10.3.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  }
+}

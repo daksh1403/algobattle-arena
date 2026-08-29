@@ -1,0 +1,104 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "algobattle.fullname" . }}-prometheus
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "algobattle.componentSelector" (dict "ctx" . "component" "prometheus") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "algobattle.componentSelector" (dict "ctx" . "component" "prometheus") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccounts.prometheus.name | default "algobattle-prometheus" }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534       # nobody
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: {{ .Values.images.prometheus }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time={{ .Values.monitoring.prometheus.retention | default "15d" }}"
+            - "--web.enable-lifecycle"
+            - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+            - "--web.console.templates=/usr/share/prometheus/consoles"
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          resources:
+            {{- toYaml .Values.monitoring.prometheus.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "algobattle.fullname" . }}-prometheus-config
+        - name: data
+          {{- if .Values.monitoring.prometheus.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "algobattle.fullname" . }}-prometheus
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+
+---
+{{- if .Values.monitoring.prometheus.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "algobattle.fullname" . }}-prometheus
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.monitoring.prometheus.persistence.size | default "20Gi" }}
+  {{- if .Values.monitoring.prometheus.persistence.storageClass }}
+  storageClassName: {{ .Values.monitoring.prometheus.persistence.storageClass }}
+  {{- end }}
+---
+{{- end }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "algobattle.fullname" . }}-prometheus
+  labels:
+    {{- include "algobattle.componentLabels" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+  selector:
+    {{- include "algobattle.componentSelector" (dict "ctx" . "component" "prometheus") | nindent 4 }}
+{{- end }}
