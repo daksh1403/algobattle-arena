@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0003"
@@ -17,26 +18,15 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 
-def _slugify(name: str) -> str:
-    """Convert a contest name to a URL-safe slug."""
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return slug
-
-
 def upgrade() -> None:
     """Add unique slug column to contests, auto-populated from name."""
     op.add_column(
         "contests",
         # nullable first, then backfill slugs, then set NOT NULL
-        op.Column("slug", op.TEXT(), nullable=True),
+        sa.Column("slug", sa.TEXT(), nullable=True),
     )
 
-    # Backfill slug for existing rows
-    conn = op.get_bind()
-    result = conn.execute(
-        op.get_context().session.query  # type: ignore[attr-defined]
-    )
-    # Use raw SQL backfill for SQLite compatibility
+    # Backfill slug for existing rows (raw SQL for SQLite compatibility).
     op.execute("""
         UPDATE contests
         SET slug = LOWER(
