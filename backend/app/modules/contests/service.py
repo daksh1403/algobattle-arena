@@ -38,7 +38,10 @@ class ContestService:
     # ---- create -------------------------------------------------------
 
     async def create(self, payload: ContestCreate) -> Contest:
+        from app.modules.contests.schemas import _make_slug
+
         contest = Contest(
+            slug=payload.slug or _make_slug(payload.name),
             name=payload.name,
             description=payload.description,
             start_at=payload.start_at,
@@ -62,6 +65,13 @@ class ContestService:
         contest = (await self.session.execute(stmt)).scalar_one_or_none()
         if contest is None:
             raise NotFoundError(f"contest {contest_id} not found")
+        return contest
+
+    async def get_by_slug(self, slug: str) -> Contest:
+        stmt = self._contest_select().where(Contest.slug == slug)
+        contest = (await self.session.execute(stmt)).scalar_one_or_none()
+        if contest is None:
+            raise NotFoundError(f"contest '{slug}' not found")
         return contest
 
     async def list(

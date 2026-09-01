@@ -52,7 +52,7 @@ export async function contestJoinCommand(
 
   try {
     await notifications.withProgress(`Joining ${picked.contest.title}`, async () => {
-      await contests.join(picked.contest.id);
+      await contests.join(String(picked.contest.id));
     });
     notifications.info(`Joined ${picked.contest.title}`);
     return picked.contest;

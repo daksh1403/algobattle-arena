@@ -142,7 +142,7 @@ function emptyNode(): Node {
 }
 function makeFakeLoading(): Contest {
   return {
-    id: '__loading__',
+    id: -1,
     slug: '__loading__',
     title: 'Loading contests…',
     description: '',
@@ -155,7 +155,7 @@ function makeFakeLoading(): Contest {
 }
 function makeFakeEmpty(): Contest {
   return {
-    id: '__empty__',
+    id: -2,
     slug: '__empty__',
     title: 'No contests yet',
     description: '',

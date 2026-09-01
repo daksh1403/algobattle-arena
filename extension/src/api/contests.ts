@@ -52,9 +52,8 @@ export class ContestAPI {
 
   /** POST /contests/:id/join — opt the current user in. */
   async join(contestId: string): Promise<void> {
-    await this.client.request<void>(`/contests/${encodeURIComponent(contestId)}/join`, {
+    await this.client.request(`/contests/${encodeURIComponent(contestId)}/join`, {
       method: 'POST',
-      expectEmpty: true,
     });
   }
 }

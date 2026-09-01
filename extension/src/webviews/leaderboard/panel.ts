@@ -82,7 +82,7 @@ export class LeaderboardPanel {
   private async bootstrap(): Promise<void> {
     let entries: LeaderboardEntry[] = [];
     try {
-      entries = await this.opts.leaderboards.get(this.current.id);
+      entries = await this.opts.leaderboards.get(String(this.current.id));
     } catch (err) {
       this.opts.notifications.warn(
         `Failed to load initial leaderboard: ${err instanceof Error ? err.message : String(err)}`,
@@ -102,7 +102,7 @@ export class LeaderboardPanel {
   private startStream(): void {
     this.disposeSubscription();
     const token = this.opts.auth.currentTokenSync();
-    this.unsubscribe = this.opts.leaderboards.subscribe(this.current.id, (entries) => {
+    this.unsubscribe = this.opts.leaderboards.subscribe(String(this.current.id), (entries) => {
       this.panel.webview.postMessage({ type: 'update', entries });
       this.panel.webview.postMessage({ type: 'status', status: 'connected' });
     }, { token });

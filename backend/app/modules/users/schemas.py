@@ -26,10 +26,14 @@ class UserCreate(BaseModel):
 
 
 class LoginIn(BaseModel):
-    """Login payload."""
+    """Login payload — accepts both `username` and `username_or_email`."""
 
     username_or_email: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=1, max_length=128)
+
+    @property
+    def identifier(self) -> str:
+        return self.username_or_email
 
 
 class UserOut(BaseModel):
@@ -42,6 +46,7 @@ class UserOut(BaseModel):
     email: EmailStr
     rating: int
     is_admin: bool = False
+    avatar_url: str | None = None
     created_at: datetime  # noqa: F821 - forward ref via pydantic
 
 

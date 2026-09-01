@@ -36,7 +36,13 @@ async def _authenticate(token: str | None) -> int | None:
     payload = decode_access_token(token)
     if payload is None:
         return None
-    return payload.get("sub")
+    sub = payload.get("sub")
+    if sub is None:
+        return None
+    try:
+        return int(sub)
+    except (ValueError, TypeError):
+        return None
 
 
 # ----------------------------------------------------------------------

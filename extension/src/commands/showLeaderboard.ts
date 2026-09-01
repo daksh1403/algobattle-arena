@@ -72,11 +72,12 @@ async function resolveById(
   contests: ContestAPI,
   cache: ContestCache,
 ): Promise<Contest | undefined> {
-  const cached = cache.getContests()?.find((c) => c.id === id);
+  const numericId = Number(id);
+  const cached = cache.getContests()?.find((c) => c.id === numericId);
   if (cached) return cached;
   const list = await contests.listAll();
   cache.setContests(list);
-  return list.find((c) => c.id === id);
+  return list.find((c) => c.id === numericId);
 }
 
 function iconForStatus(s: Contest['status']): string {

@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import dispose_engine, get_session_factory, init_engine
@@ -121,7 +122,7 @@ async def _judge_async(submission_id: int) -> dict[str, Any]:
 async def _grade_submission(
     *,
     submission_id: int,
-    session,
+    session: AsyncSession,
     judge: JudgeClient,
     redis_client,
 ) -> dict[str, Any]:

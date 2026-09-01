@@ -10,11 +10,12 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
 export type SupportedLanguage = 'python' | 'javascript' | 'cpp';
 
 export interface User {
-  id: string;
+  id: number;
   username: string;
   email: string;
   rating: number;
   avatar_url?: string | null;
+  is_admin?: boolean;
   created_at: string;
 }
 
@@ -65,7 +66,7 @@ export interface ProblemDetail extends Problem {
 }
 
 export interface Contest {
-  id: string;
+  id: number;
   slug: string;
   title: string;
   description: string;
@@ -147,7 +148,11 @@ export interface Paginated<T> {
 export function isUser(value: unknown): value is User {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return typeof v.id === 'string' && typeof v.username === 'string' && typeof v.email === 'string';
+  return (
+    (typeof v.id === 'string' || typeof v.id === 'number') &&
+    typeof v.username === 'string' &&
+    typeof v.email === 'string'
+  );
 }
 
 export function isAuthResponse(value: unknown): value is AuthResponse {
@@ -174,10 +179,16 @@ export function isProblemArray(value: unknown): value is Problem[] {
 export function isContest(value: unknown): value is Contest {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
+  // Accept both new format (title/slug) and old format (name/no slug)
+  const hasTitle = typeof v.title === 'string';
+  const hasName = typeof v.name === 'string';
+  const title = hasTitle ? v.title : (hasName ? v.name : undefined);
+  const hasSlug = typeof v.slug === 'string';
+  const hasId = typeof v.id === 'string' || typeof v.id === 'number';
+  const status = v.status ?? (typeof v.is_active === 'boolean' ? (v.is_active ? 'active' : 'past') : undefined);
   return (
-    typeof v.id === 'string' &&
-    typeof v.slug === 'string' &&
-    typeof v.title === 'string' &&
+    hasId &&
+    title !== undefined &&
     (v.status === 'upcoming' || v.status === 'active' || v.status === 'past')
   );
 }

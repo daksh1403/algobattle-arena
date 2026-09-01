@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Comma-separated list of allowed CORS origins. Use "*" only in development.
+    allowed_origins: str = "*"
 
     # --- Database ---
     database_url: str = "postgresql+asyncpg://algobattle:algobattle@localhost:5432/algobattle"
@@ -76,6 +78,14 @@ class Settings(BaseSettings):
     @property
     def effective_redis_url(self) -> str:
         return self.test_redis_url if self.is_test else self.redis_url
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse ALLOWED_ORIGINS env var into a list."""
+        val = self.allowed_origins.strip()
+        if not val or val == "*":
+            return ["*"]
+        return [o.strip() for o in val.split(",") if o.strip()]
 
     @property
     def judge0_auth_header(self) -> dict[str, str] | None:

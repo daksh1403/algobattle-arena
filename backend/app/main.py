@@ -89,11 +89,11 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
     )
 
-    # CORS — open for development; tighten via env in production.
+    # CORS — origins controlled via ALLOWED_ORIGINS env var.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=settings.cors_origins,
+        allow_credentials=len(settings.cors_origins) == 1 and settings.cors_origins[0] != "*",
         allow_methods=["*"],
         allow_headers=["*"],
     )

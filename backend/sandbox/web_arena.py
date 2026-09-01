@@ -42,7 +42,7 @@ from pydantic import BaseModel
 
 from sandbox.sandbox_runner import SandboxRunner, Verdict
 
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "gdg-admin-2026")
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 
 # ---------------------------------------------------------------------------
 # Problem bank (curated, with sample + hidden tests)
@@ -337,7 +337,7 @@ class Arena:
     # ---- auth ------------------------------------------------------------
     def register(self, name: str, admin_key: str | None = None):
         with self.lock:
-            is_admin = bool(admin_key) and admin_key == ADMIN_KEY
+            is_admin = bool(admin_key) and bool(ADMIN_KEY) and admin_key == ADMIN_KEY
             raw_token = uuid.uuid4().hex
             p = Participant(
                 id=self.counter + 1,

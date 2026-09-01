@@ -76,10 +76,10 @@ function coerceResults(input: unknown): TestCaseResult[] {
 }
 
 function coerceUser(input: unknown): Submission['user'] {
-  if (!input || typeof input !== 'object') return { id: '', username: 'unknown' };
+  if (!input || typeof input !== 'object') return { id: 0, username: 'unknown' };
   const u = input as Record<string, unknown>;
   return {
-    id: typeof u.id === 'string' ? u.id : '',
+    id: typeof u.id === 'string' || typeof u.id === 'number' ? Number(u.id) : 0,
     username: typeof u.username === 'string' ? u.username : 'unknown',
   };
 }
