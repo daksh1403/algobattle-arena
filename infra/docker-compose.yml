@@ -45,6 +45,8 @@ volumes:
   grafana_data:
   loki_data:
   alertmanager_data:
+  traefik_letsencrypt:
+  prom_multiproc_worker:
 
 # ---------------------------------------------------------------------------
 # Proxy — Traefik
@@ -548,7 +550,3 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
-
-volumes:
-  traefik_letsencrypt:
-  prom_multiproc_worker:

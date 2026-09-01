@@ -48,7 +48,7 @@ function makeProblem(slug: string, title: string, difficulty: Problem['difficult
 
 function makeContest(slug: string, title: string, status: Contest['status']): Contest {
   return {
-    id: `id-${slug}`,
+    id: 1,
     slug,
     title,
     description: '',
