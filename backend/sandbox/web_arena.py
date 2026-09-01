@@ -42,7 +42,7 @@ from pydantic import BaseModel
 
 from sandbox.sandbox_runner import SandboxRunner, Verdict
 
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "gdg-admin-2026")
 
 # ---------------------------------------------------------------------------
 # Problem bank (curated, with sample + hidden tests)

@@ -149,22 +149,36 @@ algobattle/
 
 ### One-command demo (what the live site does)
 
+**You need two terminals.** Terminal 1 runs the judge + tunnel; Terminal 2 points the Cloudflare Worker at it.
+
+**Terminal 1 — start the judge + tunnel (keep running):**
+
 ```bash
 # 1. Start the judge on your machine
 cd backend && .venv/bin/python sandbox/web_arena.py
 # → FastAPI on 127.0.0.1:8080, sandbox online
 
-# 2. Expose it with a free Cloudflare quick tunnel
+# 2. In a SECOND terminal, expose it with a free Cloudflare quick tunnel
 cloudflared tunnel --url http://127.0.0.1:8080
-# → prints https://random-words.trycloudflare.com
+# → prints something like: https://random-words.trycloudflare.com
+#    COPY this URL — you'll paste it in step 3.
+```
 
+**Terminal 2 — point the deployed Worker at the tunnel (run once):**
+
+```bash
 # 3. Point the deployed Worker at the tunnel
 cd backend/sandbox/deploy/worker
-wrangler secret put TUNNEL_URL    # paste the trycloudflare URL
+wrangler secret put TUNNEL_URL
+#    paste the trycloudflare URL from step 2, press Enter
+#    (wrangler may pause for ~30s — that's normal, wait for "Success")
+wrangler deploy
 
 # 4. Open the live site and submit a solution
 open https://algobattle-arena.dakshx.workers.dev/
 ```
+
+> **Heads up:** the quick-tunnel URL changes every time you restart `cloudflared`. If the live site stops responding, redo step 2 + 3 (or use a named tunnel — see `backend/sandbox/deploy/vps-setup.md` for a persistent setup).
 
 ### Local development (FastAPI backend)
 
@@ -365,6 +379,26 @@ cd backend && .venv/bin/python -m pytest tests/ app/modules/ sandbox/tests/test_
 
 ## Cost & scalability
 
+### Why this architecture scales
+
+- **Stateless API** — FastAPI instances hold no session state; scale horizontally behind a load balancer by adding replicas (no sticky sessions needed).
+- **Async everything** — SQLAlchemy 2 async + asyncpg + async Redis means a single uvicorn worker handles thousands of concurrent connections, so you need fewer instances for the same load.
+- **Redis-backed leaderboard** — ZSET `O(log n)` inserts and range queries; ranking stays fast even with 10k+ participants. Ties broken by solve time via a second ZSET.
+- **Job queue decouples judging from the API** — submissions are enqueued to RQ and graded by workers; a spike in submissions backlogs the queue instead of blocking API responses. Add workers to scale throughput.
+- **Idempotent state machine** — `PENDING → RUNNING → terminal` with a sweeper that re-enqueues stuck jobs, so workers can crash and restart without corrupting results.
+
+### Database optimization
+
+| Technique | Where |
+|---|---|
+| Indexes on all FK + query fields | `migrations/versions/0001_initial.py` |
+| `UniqueConstraint` on join tables | `(contest_id, user_id)`, `(contest_id, problem_id)` |
+| JSONB for `boilerplate_code`, ARRAY for `tags` | Postgres-native types |
+| `selectinload` to avoid N+1 | `contests/service.py` |
+| Pagination on all list endpoints | `core/pagination.py` |
+
+### Cost
+
 - **Live path:** $0/mo — Cloudflare free tier (Worker + KV + tunnel) + your machine or a free Codespace
 - **FastAPI path:** stateless API + Redis-backed leaderboard; scale by adding RQ workers / API instances
 - Full cost math: [`docs/COST.md`](docs/COST.md)
@@ -378,7 +412,6 @@ cd backend && .venv/bin/python -m pytest tests/ app/modules/ sandbox/tests/test_
 - **Quick-tunnel URL rotates** on each `cloudflared` restart — use a named tunnel for stability
 - **No reconciliation** between SQL points and Redis ZSET if a worker dies between the two writes
 - **No contest time-window check on submit** (FastAPI path) — join enforces it, submit doesn't yet
-- **CORS** is `*` + credentials in dev, which Starlette rejects for credentialed cross-origin calls — needs an env-driven production origin
 
 ---
 
@@ -399,4 +432,4 @@ cd backend && .venv/bin/python -m pytest tests/ app/modules/ sandbox/tests/test_
 
 ## License
 
-MIT.
+MIT. See [`LICENSE.md`](LICENSE.md).
