@@ -873,6 +873,9 @@ async def step_participant_accepts(context):
 
         # Simulate judging inline
         from app.modules.submissions.tasks import _grade_submission
+        from app.redis_client import get_redis
+
+        redis_client = get_redis()
         from app.modules.submissions.judge_client import JudgeClient
 
         class DummyJudge:
@@ -891,7 +894,7 @@ async def step_participant_accepts(context):
             submission_id=sub.id,
             session=session,
             judge=DummyJudge(),
-            redis_client=redis,
+            redis_client=redis_client,
         )
         await session.commit()
 

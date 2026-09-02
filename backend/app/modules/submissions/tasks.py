@@ -126,6 +126,7 @@ async def _grade_submission(
     judge: JudgeClient,
     redis_client,
 ) -> dict[str, Any]:
+    settings = get_settings()
     submission = await session.get(Submission, submission_id)
     if submission is None:
         logger.warning("judge: submission %s not found", submission_id)
