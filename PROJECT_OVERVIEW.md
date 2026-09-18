@@ -4,7 +4,7 @@
 > hit, how we fixed it, and how the tricky parts (auth, edge cases, access
 > control, sandboxing, persistence) are handled. Single source of truth for
 > the GDG walkthrough, a new contributor onboarding, or a future-you in 6
-> months who forgot everything.
+> months who forgot everything
 
 ---
 
